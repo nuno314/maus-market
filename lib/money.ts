@@ -1,6 +1,6 @@
 import type { Condition } from "@/lib/sets";
 
-export type Currency = "USD" | "JPY";
+export type Currency = "USD" | "JPY" | "VND";
 
 export type PriceSettings = {
   usdVnd: number;
@@ -19,7 +19,7 @@ export function conditionFactor(condition: Condition, settings: PriceSettings): 
 
 export function computeVnd(input: {
   sourcePrice: number;
-  currency: Currency;
+  currency: Exclude<Currency, "VND">;
   condition: Condition;
   conditionPriced: boolean;
   settings: PriceSettings;
@@ -40,6 +40,7 @@ export function formatVnd(amount: number): string {
 }
 
 export function formatSource(amount: number, currency: Currency): string {
+  if (currency === "VND") return formatVnd(amount);
   if (currency === "USD") {
     return new Intl.NumberFormat("en-US", {
       style: "currency",

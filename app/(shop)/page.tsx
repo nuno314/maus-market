@@ -4,8 +4,8 @@ import { listShopListings } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
-export default function HomePage() {
-  const listings = listShopListings();
+export default async function HomePage() {
+  const listings = await listShopListings();
   return (
     <div>
       <section className="overflow-hidden rounded-[2rem] bg-white px-5 py-6 ring-1 ring-[#d5e3f0] sm:px-8">

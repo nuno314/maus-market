@@ -11,8 +11,8 @@ const statusLabel: Record<OrderStatus, string> = {
   cancelled: "Hủy",
 };
 
-export default function OrdersPage() {
-  const orders = listOrders();
+export default async function OrdersPage() {
+  const orders = await listOrders();
   return (
     <div>
       <h1 className="text-2xl font-extrabold">Đơn hàng</h1>

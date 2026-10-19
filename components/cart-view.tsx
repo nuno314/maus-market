@@ -4,10 +4,9 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { CardThumb } from "@/components/card-thumb";
 import { useCart } from "@/components/cart-provider";
-import { ConditionBadge } from "@/components/condition-badge";
+import { ProductMeta } from "@/components/product-meta";
 import { Button } from "@/components/ui/button";
 import { formatVnd } from "@/lib/money";
-import { setCaption } from "@/lib/sets";
 import type { ShopListing } from "@/lib/store";
 
 export function CartView() {
@@ -22,9 +21,9 @@ export function CartView() {
   }
   if (cart.lines.length === 0) {
     return (
-      <Panel title="Giỏ đang trống" body="Chọn lá ở trang chủ, rồi quay lại đây để thanh toán.">
+      <Panel title="Giỏ đang trống" body="Chọn sản phẩm ở trang chủ, rồi quay lại đây để thanh toán.">
         <Link href="/" className="mt-4 inline-flex h-10 items-center rounded-full bg-[#24344a] px-4 text-sm font-semibold text-white">
-          Xem thẻ đang có
+          Xem sản phẩm đang có
         </Link>
       </Panel>
     );
@@ -55,12 +54,8 @@ export function CartView() {
               {listing && listing.quantity > 0 ? (
                 <>
                   <p className="font-bold">{listing.name}</p>
-                  <p className="text-sm text-[#5d7388]">
-                    {setCaption(listing)} · #{listing.number}
-                  </p>
-                  <div className="mt-1">
-                    <ConditionBadge condition={listing.condition} />
-                  </div>
+                  {listing.description ? <p className="line-clamp-2 text-xs text-[#5d7388]">{listing.description}</p> : null}
+                  <ProductMeta item={listing} />
                   <p className="mt-2 font-extrabold">{formatVnd(listing.priceVnd)}</p>
                   <div className="mt-2 flex items-center gap-2">
                     <Button

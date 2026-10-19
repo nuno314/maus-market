@@ -1,9 +1,14 @@
-import type { Condition, Language } from "@/lib/sets";
-import { CONDITIONS } from "@/lib/sets";
+import type { Category, Condition, Language } from "@/lib/sets";
+import { CATEGORIES, CONDITIONS } from "@/lib/sets";
 
 export function parseCondition(value: FormDataEntryValue | null): Condition | null {
   const text = String(value ?? "");
   return CONDITIONS.includes(text as Condition) ? (text as Condition) : null;
+}
+
+export function parseCategory(value: FormDataEntryValue | null): Category | null {
+  const text = String(value ?? "");
+  return CATEGORIES.some((item) => item.id === text) ? (text as Category) : null;
 }
 
 export function parseLanguage(value: FormDataEntryValue | null): Language | null {
@@ -16,6 +21,14 @@ export function parseQuantity(value: FormDataEntryValue | null): number | null {
   const quantity = Number(value);
   if (!Number.isInteger(quantity) || quantity < 0 || quantity > 99) return null;
   return quantity;
+}
+
+export function parseVnd(value: FormDataEntryValue | null): number | null {
+  const digits = String(value ?? "").replace(/[^\d]/g, "");
+  if (!digits) return null;
+  const amount = Number(digits);
+  if (!Number.isInteger(amount) || amount < 1000 || amount > 100_000_000) return null;
+  return amount;
 }
 
 export function parseMoney(value: FormDataEntryValue | null): number | null {

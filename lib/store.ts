@@ -1,10 +1,11 @@
 import { randomBytes } from "crypto";
 import { desc, eq, gt, inArray, like, or, sql } from "drizzle-orm";
-import { getDb, getSqlite } from "@/lib/db";
+import type { Client } from "@libsql/client";
+import { getClient, getDb } from "@/lib/db";
 import { cards, listings, orderItems, orders, settings } from "@/lib/schema";
 import type { PriceSettings } from "@/lib/money";
-import type { Condition, Language } from "@/lib/sets";
-import { conditionRank, seasonRank } from "@/lib/sets";
+import type { Category, Condition, Language } from "@/lib/sets";
+import { asCategory, conditionRank, seasonRank } from "@/lib/sets";
 
 export type CardRow = {
   id: string;
@@ -17,6 +18,8 @@ export type CardRow = {
   name: string;
   imageUrl: string;
   manual: number;
+  category: Category;
+  description: string;
 };
 
 export type ShopListing = {
@@ -28,13 +31,15 @@ export type ShopListing = {
   language: Language;
   seasonKey: string;
   number: string;
+  category: Category;
   condition: Condition;
   quantity: number;
   priceVnd: number;
   imageUrl: string;
+  description: string;
   sourceLabel: string | null;
   sourcePrice: number | null;
-  sourceCurrency: "USD" | "JPY";
+  sourceCurrency: "USD" | "JPY" | "VND";
   sourceUrl: string | null;
 };
 
@@ -62,6 +67,8 @@ export type OrderItemRow = {
   condition: Condition;
   imageUrl: string;
   number: string;
+  category: Category;
+  description: string;
   quantity: number;
   unitPriceVnd: number;
 };
@@ -75,9 +82,9 @@ function asCondition(value: string): Condition {
   return "A";
 }
 
-export function getSettings(): PriceSettings & { ratesUpdatedAt: string | null } {
-  const db = getDb();
-  const row = db.select().from(settings).where(eq(settings.id, 1)).get();
+export async function getSettings(): Promise<PriceSettings & { ratesUpdatedAt: string | null }> {
+  const db = await getDb();
+  const row = await db.select().from(settings).where(eq(settings.id, 1)).get();
   if (!row) {
     return {
       usdVnd: 25972,
@@ -100,9 +107,9 @@ export function getSettings(): PriceSettings & { ratesUpdatedAt: string | null }
   };
 }
 
-export function saveSettings(next: PriceSettings) {
-  const db = getDb();
-  db.update(settings)
+export async function saveSettings(next: PriceSettings) {
+  const db = await getDb();
+  await db.update(settings)
     .set({
       usdVnd: next.usdVnd,
       jpyVnd: next.jpyVnd,
@@ -116,18 +123,17 @@ export function saveSettings(next: PriceSettings) {
     .run();
 }
 
-export function countCards() {
-  const db = getDb();
-  const row = db.select({ count: sql<number>`count(*)` }).from(cards).get();
+export async function countCards() {
+  const db = await getDb();
+  const row = await db.select({ count: sql<number>`count(*)` }).from(cards).get();
   return row?.count ?? 0;
 }
 
-export function upsertCatalogCard(card: Omit<CardRow, "manual">) {
-  const sqlite = getSqlite();
-  sqlite
-    .prepare(
-      `INSERT INTO cards (id, language, set_id, set_name, set_code, season_key, number, name, image_url, manual)
-       VALUES (@id, @language, @setId, @setName, @setCode, @seasonKey, @number, @name, @imageUrl, 0)
+export async function upsertCatalogCard(card: Omit<CardRow, "manual" | "category" | "description">) {
+  const client = await getClient();
+  await client.execute({
+    sql: `INSERT INTO cards (id, language, set_id, set_name, set_code, season_key, number, name, image_url, manual)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
        ON CONFLICT(id) DO UPDATE SET
          language = excluded.language,
          set_id = excluded.set_id,
@@ -138,16 +144,26 @@ export function upsertCatalogCard(card: Omit<CardRow, "manual">) {
          name = excluded.name,
          image_url = excluded.image_url
        WHERE cards.manual = 0`,
-    )
-    .run(card);
+    args: [
+      card.id,
+      card.language,
+      card.setId,
+      card.setName,
+      card.setCode,
+      card.seasonKey,
+      card.number,
+      card.name,
+      card.imageUrl,
+    ],
+  });
 }
 
-export function searchCards(query: string): CardRow[] {
+export async function searchCards(query: string): Promise<CardRow[]> {
   const trimmed = query.trim();
   if (!trimmed) return [];
   const needle = `%${trimmed.replace(/[%_]/g, "")}%`;
-  const db = getDb();
-  const rows = db
+  const db = await getDb();
+  const rows = await db
     .select()
     .from(cards)
     .where(
@@ -163,9 +179,9 @@ export function searchCards(query: string): CardRow[] {
   return rows.map(mapCard);
 }
 
-export function getCard(id: string): CardRow | null {
-  const db = getDb();
-  const row = db.select().from(cards).where(eq(cards.id, id)).get();
+export async function getCard(id: string): Promise<CardRow | null> {
+  const db = await getDb();
+  const row = await db.select().from(cards).where(eq(cards.id, id)).get();
   return row ? mapCard(row) : null;
 }
 
@@ -181,10 +197,12 @@ function mapCard(row: typeof cards.$inferSelect): CardRow {
     name: row.name,
     imageUrl: row.imageUrl,
     manual: row.manual,
+    category: asCategory(row.category),
+    description: row.description ?? "",
   };
 }
 
-export function insertManualCard(input: {
+export async function insertManualCard(input: {
   language: Language;
   setId: string;
   setName: string;
@@ -193,10 +211,12 @@ export function insertManualCard(input: {
   number: string;
   name: string;
   imageUrl: string;
-}): CardRow {
+  category: Category;
+  description: string;
+}): Promise<CardRow> {
   const id = `manual_${randomBytes(6).toString("hex")}`;
-  const db = getDb();
-  db.insert(cards)
+  const db = await getDb();
+  await db.insert(cards)
     .values({
       id,
       language: input.language,
@@ -208,9 +228,11 @@ export function insertManualCard(input: {
       name: input.name.trim(),
       imageUrl: input.imageUrl.trim(),
       manual: 1,
+      category: input.category,
+      description: input.description.trim(),
     })
     .run();
-  return getCard(id)!;
+  return (await getCard(id))!;
 }
 
 const listingSelect = {
@@ -222,10 +244,12 @@ const listingSelect = {
   language: cards.language,
   seasonKey: cards.seasonKey,
   number: cards.number,
+  category: cards.category,
   condition: listings.condition,
   quantity: listings.quantity,
   priceVnd: listings.priceVnd,
   imageUrl: cards.imageUrl,
+  description: cards.description,
   sourceLabel: listings.sourceLabel,
   sourcePrice: listings.sourcePrice,
   sourceCurrency: listings.sourceCurrency,
@@ -241,10 +265,12 @@ function mapListing(row: {
   language: string;
   seasonKey: string;
   number: string;
+  category: string;
   condition: string;
   quantity: number;
   priceVnd: number;
   imageUrl: string;
+  description: string;
   sourceLabel: string | null;
   sourcePrice: number | null;
   sourceCurrency: string;
@@ -253,8 +279,9 @@ function mapListing(row: {
   return {
     ...row,
     language: asLanguage(row.language),
+    category: asCategory(row.category),
     condition: asCondition(row.condition),
-    sourceCurrency: row.sourceCurrency === "JPY" ? "JPY" : "USD",
+    sourceCurrency: row.sourceCurrency === "JPY" ? "JPY" : row.sourceCurrency === "VND" ? "VND" : "USD",
   };
 }
 
@@ -268,9 +295,9 @@ function sortListings(rows: ShopListing[]) {
   });
 }
 
-export function listShopListings(): ShopListing[] {
-  const db = getDb();
-  const rows = db
+export async function listShopListings(): Promise<ShopListing[]> {
+  const db = await getDb();
+  const rows = await db
     .select(listingSelect)
     .from(listings)
     .innerJoin(cards, eq(listings.cardId, cards.id))
@@ -279,9 +306,9 @@ export function listShopListings(): ShopListing[] {
   return sortListings(rows.map(mapListing));
 }
 
-export function listAllListings(): ShopListing[] {
-  const db = getDb();
-  const rows = db
+export async function listAllListings(): Promise<ShopListing[]> {
+  const db = await getDb();
+  const rows = await db
     .select(listingSelect)
     .from(listings)
     .innerJoin(cards, eq(listings.cardId, cards.id))
@@ -290,10 +317,10 @@ export function listAllListings(): ShopListing[] {
   return rows.map(mapListing);
 }
 
-export function getListingsByIds(ids: number[]): ShopListing[] {
+export async function getListingsByIds(ids: number[]): Promise<ShopListing[]> {
   if (ids.length === 0) return [];
-  const db = getDb();
-  const rows = db
+  const db = await getDb();
+  const rows = await db
     .select(listingSelect)
     .from(listings)
     .innerJoin(cards, eq(listings.cardId, cards.id))
@@ -302,37 +329,36 @@ export function getListingsByIds(ids: number[]): ShopListing[] {
   return rows.map(mapListing);
 }
 
-export function getListing(id: number): ShopListing | null {
-  return getListingsByIds([id])[0] ?? null;
+export async function getListing(id: number): Promise<ShopListing | null> {
+  return (await getListingsByIds([id]))[0] ?? null;
 }
 
-export function saveListing(input: {
+export async function saveListing(input: {
   cardId: string;
   condition: Condition;
   quantity: number;
   sourcePrice: number;
-  sourceCurrency: "USD" | "JPY";
+  sourceCurrency: "USD" | "JPY" | "VND";
   sourceUrl: string | null;
   sourceLabel: string;
   conditionPriced: boolean;
   priceVnd: number;
 }) {
   const now = new Date().toISOString();
-  const sqlite = getSqlite();
-  const existing = sqlite
-    .prepare(`SELECT id FROM listings WHERE card_id = ? AND condition = ?`)
-    .get(input.cardId, input.condition) as { id: number } | undefined;
-  if (existing) {
+  const client = await getClient();
+  const existing = await client.execute({
+    sql: `SELECT id FROM listings WHERE card_id = ? AND condition = ?`,
+    args: [input.cardId, input.condition],
+  });
+  if (existing.rows[0]) {
     throw new Error("DUPLICATE");
   }
-  const result = sqlite
-    .prepare(
-      `INSERT INTO listings (
+  const result = await client.execute({
+    sql: `INSERT INTO listings (
         card_id, condition, quantity, source_price, source_currency, source_url, source_label,
         condition_priced, price_vnd, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
+    args: [
       input.cardId,
       input.condition,
       input.quantity,
@@ -344,19 +370,20 @@ export function saveListing(input: {
       input.priceVnd,
       now,
       now,
-    );
+    ],
+  });
   return Number(result.lastInsertRowid);
 }
 
-export function updateListingQuantity(id: number, quantity: number) {
-  const db = getDb();
-  db.update(listings)
+export async function updateListingQuantity(id: number, quantity: number) {
+  const db = await getDb();
+  await db.update(listings)
     .set({ quantity, updatedAt: new Date().toISOString() })
     .where(eq(listings.id, id))
     .run();
 }
 
-export function updateListingPrice(
+export async function updateListingPrice(
   id: number,
   input: {
     sourcePrice: number;
@@ -367,8 +394,8 @@ export function updateListingPrice(
     priceVnd: number;
   },
 ) {
-  const db = getDb();
-  db.update(listings)
+  const db = await getDb();
+  await db.update(listings)
     .set({
       sourcePrice: input.sourcePrice,
       sourceCurrency: input.sourceCurrency,
@@ -382,14 +409,14 @@ export function updateListingPrice(
     .run();
 }
 
-export function deleteListing(id: number) {
-  const db = getDb();
-  db.delete(listings).where(eq(listings.id, id)).run();
+export async function deleteListing(id: number) {
+  const db = await getDb();
+  await db.delete(listings).where(eq(listings.id, id)).run();
 }
 
-export function countNewOrders() {
-  const db = getDb();
-  const row = db
+export async function countNewOrders() {
+  const db = await getDb();
+  const row = await db
     .select({ count: sql<number>`count(*)` })
     .from(orders)
     .where(eq(orders.status, "new"))
@@ -397,35 +424,37 @@ export function countNewOrders() {
   return row?.count ?? 0;
 }
 
-export function listOrders(): OrderRow[] {
-  const sqlite = getSqlite();
-  const rows = sqlite
-    .prepare(
-      `SELECT o.id, o.code, o.zalo_phone as zaloPhone, o.zalo_name as zaloName,
-              o.shipping_method as shippingMethod, o.shipping_address as shippingAddress,
-              o.status, o.created_at as createdAt,
-              COUNT(i.id) as itemCount,
-              COALESCE(SUM(i.quantity * i.unit_price_vnd), 0) as totalVnd
-       FROM orders o
-       LEFT JOIN order_items i ON i.order_id = o.id
-       GROUP BY o.id
-       ORDER BY o.id DESC`,
-    )
-    .all() as OrderRow[];
-  return rows.map((row) => ({
-    ...row,
-    shippingMethod: row.shippingMethod === "manual" ? "manual" : "later",
-    status: row.status as OrderStatus,
-    itemCount: Number(row.itemCount),
-    totalVnd: Number(row.totalVnd),
-  }));
+export async function listOrders(): Promise<OrderRow[]> {
+  const client = await getClient();
+  const result = await client.execute(
+    `SELECT o.id, o.code, o.zalo_phone as zaloPhone, o.zalo_name as zaloName,
+            o.shipping_method as shippingMethod, o.shipping_address as shippingAddress,
+            o.status, o.created_at as createdAt,
+            COUNT(i.id) as itemCount,
+            COALESCE(SUM(i.quantity * i.unit_price_vnd), 0) as totalVnd
+     FROM orders o
+     LEFT JOIN order_items i ON i.order_id = o.id
+     GROUP BY o.id
+     ORDER BY o.id DESC`,
+  );
+  return result.rows.map((row) => {
+    const item = row as unknown as OrderRow;
+    return {
+      ...item,
+      id: Number(item.id),
+      shippingMethod: item.shippingMethod === "manual" ? "manual" : "later",
+      status: item.status as OrderStatus,
+      itemCount: Number(item.itemCount),
+      totalVnd: Number(item.totalVnd),
+    };
+  });
 }
 
-export function getOrder(id: number): (OrderRow & { items: OrderItemRow[] }) | null {
-  const db = getDb();
-  const order = db.select().from(orders).where(eq(orders.id, id)).get();
+export async function getOrder(id: number): Promise<(OrderRow & { items: OrderItemRow[] }) | null> {
+  const db = await getDb();
+  const order = await db.select().from(orders).where(eq(orders.id, id)).get();
   if (!order) return null;
-  const items = db.select().from(orderItems).where(eq(orderItems.orderId, id)).all();
+  const items = await db.select().from(orderItems).where(eq(orderItems.orderId, id)).all();
   const totalVnd = items.reduce((sum, item) => sum + item.quantity * item.unitPriceVnd, 0);
   return {
     id: order.id,
@@ -447,57 +476,100 @@ export function getOrder(id: number): (OrderRow & { items: OrderItemRow[] }) | n
       condition: asCondition(item.condition),
       imageUrl: item.imageUrl,
       number: item.number,
+      category: asCategory(item.category),
+      description: item.description ?? "",
       quantity: item.quantity,
       unitPriceVnd: item.unitPriceVnd,
     })),
   };
 }
 
-export function getOrderByCode(code: string) {
-  const db = getDb();
-  const order = db.select().from(orders).where(eq(orders.code, code)).get();
+export async function getOrderByCode(code: string) {
+  const db = await getDb();
+  const order = await db.select().from(orders).where(eq(orders.code, code)).get();
   if (!order) return null;
   return getOrder(order.id);
 }
 
-export function setOrderStatus(id: number, status: OrderStatus) {
-  const sqlite = getSqlite();
-  const current = sqlite.prepare(`SELECT status FROM orders WHERE id = ?`).get(id) as
-    | { status: OrderStatus }
-    | undefined;
+export async function setOrderStatus(id: number, status: OrderStatus) {
+  const client = await getClient();
+  const currentResult = await client.execute({
+    sql: `SELECT status FROM orders WHERE id = ?`,
+    args: [id],
+  });
+  const current = currentResult.rows[0] as unknown as { status: OrderStatus } | undefined;
   if (!current) return;
   if (current.status !== "cancelled" && status === "cancelled") {
-    const items = sqlite
-      .prepare(`SELECT listing_id as listingId, quantity FROM order_items WHERE order_id = ?`)
-      .all(id) as { listingId: number | null; quantity: number }[];
-    const restore = sqlite.transaction(() => {
-      for (const item of items) {
-        if (!item.listingId) continue;
-        sqlite
-          .prepare(`UPDATE listings SET quantity = quantity + ?, updated_at = ? WHERE id = ?`)
-          .run(item.quantity, new Date().toISOString(), item.listingId);
-      }
-      sqlite.prepare(`UPDATE orders SET status = ? WHERE id = ?`).run(status, id);
+    const itemResult = await client.execute({
+      sql: `SELECT listing_id as listingId, quantity FROM order_items WHERE order_id = ?`,
+      args: [id],
     });
-    restore();
+    const tx = await client.transaction("write");
+    const now = new Date().toISOString();
+    try {
+      for (const item of itemResult.rows as unknown as { listingId: number | null; quantity: number }[]) {
+        if (!item.listingId) continue;
+        await tx.execute({
+          sql: `UPDATE listings SET quantity = quantity + ?, updated_at = ? WHERE id = ?`,
+          args: [Number(item.quantity), now, Number(item.listingId)],
+        });
+      }
+      await tx.execute({
+        sql: `UPDATE orders SET status = ? WHERE id = ?`,
+        args: [status, id],
+      });
+      await tx.commit();
+    } catch (error) {
+      await tx.rollback();
+      throw error;
+    } finally {
+      tx.close();
+    }
     return;
   }
-  sqlite.prepare(`UPDATE orders SET status = ? WHERE id = ?`).run(status, id);
+  await client.execute({
+    sql: `UPDATE orders SET status = ? WHERE id = ?`,
+    args: [status, id],
+  });
 }
 
 export type CheckoutLine = { listingId: number; quantity: number };
 
-export function placeOrder(input: {
+export async function placeOrder(input: {
   lines: CheckoutLine[];
   zaloPhone: string;
   zaloName: string;
   shippingMethod: "manual" | "later";
   shippingAddress: string | null;
-}): { code: string } {
-  const sqlite = getSqlite();
-  const code = makeOrderCode(sqlite);
+}): Promise<{ code: string }> {
+  const client = await getClient();
+  const code = await makeOrderCode(client);
   const now = new Date().toISOString();
-  const run = sqlite.transaction(() => {
+  const tx = await client.transaction("write");
+  try {
+    await writeOrder(tx, input, code, now);
+    await tx.commit();
+  } catch (error) {
+    await tx.rollback();
+    throw error;
+  } finally {
+    tx.close();
+  }
+  return { code };
+}
+
+async function writeOrder(
+  sqlite: Pick<Client, "execute">,
+  input: {
+    lines: CheckoutLine[];
+    zaloPhone: string;
+    zaloName: string;
+    shippingMethod: "manual" | "later";
+    shippingAddress: string | null;
+  },
+  code: string,
+  now: string,
+) {
     const snapshots: {
       listingId: number;
       cardName: string;
@@ -507,70 +579,80 @@ export function placeOrder(input: {
       condition: string;
       imageUrl: string;
       number: string;
+      category: string;
+      description: string;
       quantity: number;
       unitPriceVnd: number;
     }[] = [];
 
-    for (const line of input.lines) {
-      const row = sqlite
-        .prepare(
-          `SELECT l.id, l.quantity, l.price_vnd as priceVnd, l.condition,
+  for (const line of input.lines) {
+    const found = await sqlite.execute({
+      sql: `SELECT l.id, l.quantity, l.price_vnd as priceVnd, l.condition,
                   c.name as cardName, c.set_name as setName, c.set_code as setCode,
-                  c.language, c.image_url as imageUrl, c.number
+                  c.language, c.image_url as imageUrl, c.number, c.category as category, c.description as description
            FROM listings l JOIN cards c ON c.id = l.card_id
            WHERE l.id = ?`,
-        )
-        .get(line.listingId) as
-        | {
-            id: number;
-            quantity: number;
-            priceVnd: number;
-            condition: string;
-            cardName: string;
-            setName: string;
-            setCode: string;
-            language: string;
-            imageUrl: string;
-            number: string;
-          }
-        | undefined;
-      if (!row) {
-        throw new Error("Một lá trong giỏ không còn trên shop.");
-      }
-      if (line.quantity < 1 || line.quantity > row.quantity) {
-        throw new Error(`${row.cardName} (${row.condition}) chỉ còn ${row.quantity} lá.`);
-      }
-      sqlite
-        .prepare(`UPDATE listings SET quantity = quantity - ?, updated_at = ? WHERE id = ?`)
-        .run(line.quantity, now, row.id);
-      snapshots.push({
-        listingId: row.id,
-        cardName: row.cardName,
-        setName: row.setName,
-        setCode: row.setCode,
-        language: row.language,
-        condition: row.condition,
-        imageUrl: row.imageUrl,
-        number: row.number,
-        quantity: line.quantity,
-        unitPriceVnd: row.priceVnd,
-      });
+      args: [line.listingId],
+    });
+    const row = found.rows[0] as unknown as
+      | {
+          id: number;
+          quantity: number;
+          priceVnd: number;
+          condition: string;
+          cardName: string;
+          setName: string;
+          setCode: string;
+          language: string;
+          imageUrl: string;
+          number: string;
+          category: string;
+          description: string;
+        }
+      | undefined;
+    if (!row) {
+      throw new Error("Một sản phẩm trong giỏ không còn trên shop.");
     }
+    const quantityLeft = Number(row.quantity);
+    if (line.quantity < 1 || line.quantity > quantityLeft) {
+      const left =
+        row.category === "card"
+          ? `${row.cardName} (${row.condition}) chỉ còn ${quantityLeft} lá.`
+          : `${row.cardName} chỉ còn ${quantityLeft}.`;
+      throw new Error(left);
+    }
+    await sqlite.execute({
+      sql: `UPDATE listings SET quantity = quantity - ?, updated_at = ? WHERE id = ?`,
+      args: [line.quantity, now, Number(row.id)],
+    });
+    snapshots.push({
+      listingId: Number(row.id),
+      cardName: row.cardName,
+      setName: row.setName,
+      setCode: row.setCode,
+      language: row.language,
+      condition: row.condition,
+      imageUrl: row.imageUrl,
+      number: row.number,
+      category: row.category,
+      description: row.description ?? "",
+      quantity: line.quantity,
+      unitPriceVnd: Number(row.priceVnd),
+    });
+  }
 
-    const order = sqlite
-      .prepare(
-        `INSERT INTO orders (code, zalo_phone, zalo_name, shipping_method, shipping_address, status, created_at)
+  const order = await sqlite.execute({
+    sql: `INSERT INTO orders (code, zalo_phone, zalo_name, shipping_method, shipping_address, status, created_at)
          VALUES (?, ?, ?, ?, ?, 'new', ?)`,
-      )
-      .run(code, input.zaloPhone, input.zaloName, input.shippingMethod, input.shippingAddress, now);
-    const orderId = Number(order.lastInsertRowid);
-    const insertItem = sqlite.prepare(
-      `INSERT INTO order_items (
-        order_id, listing_id, card_name, set_name, set_code, language, condition, image_url, number, quantity, unit_price_vnd
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    );
-    for (const item of snapshots) {
-      insertItem.run(
+    args: [code, input.zaloPhone, input.zaloName, input.shippingMethod, input.shippingAddress, now],
+  });
+  const orderId = Number(order.lastInsertRowid);
+  for (const item of snapshots) {
+    await sqlite.execute({
+      sql: `INSERT INTO order_items (
+        order_id, listing_id, card_name, set_name, set_code, language, condition, image_url, number, category, description, quantity, unit_price_vnd
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
         orderId,
         item.listingId,
         item.cardName,
@@ -580,24 +662,24 @@ export function placeOrder(input: {
         item.condition,
         item.imageUrl,
         item.number,
+        item.category,
+        item.description,
         item.quantity,
         item.unitPriceVnd,
-      );
-    }
-  });
-  run();
-  return { code };
+      ],
+    });
+  }
 }
 
-function makeOrderCode(sqlite: ReturnType<typeof getSqlite>) {
+async function makeOrderCode(sqlite: Pick<Client, "execute">) {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const bytes = randomBytes(6);
     let body = "";
     for (let i = 0; i < 6; i += 1) body += alphabet[bytes[i]! % alphabet.length];
     const code = `MC-${body}`;
-    const exists = sqlite.prepare(`SELECT 1 FROM orders WHERE code = ?`).get(code);
-    if (!exists) return code;
+    const exists = await sqlite.execute({ sql: `SELECT 1 FROM orders WHERE code = ?`, args: [code] });
+    if (exists.rows.length === 0) return code;
   }
   return `MC-${Date.now().toString(36).toUpperCase()}`;
 }

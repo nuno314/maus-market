@@ -1,5 +1,5 @@
 import { CardrushBlockedError, cardrushKeyword, fetchCardrushListings, pickCardrushPrice } from "@/lib/cardrush";
-import { computeVnd } from "@/lib/money";
+import { computeVnd, type PriceSettings } from "@/lib/money";
 import { cardrushSearchUrl, findSet, type Condition } from "@/lib/sets";
 import type { CardRow } from "@/lib/store";
 import { getSettings } from "@/lib/store";
@@ -25,7 +25,7 @@ export type PriceQuote =
 
 export async function quoteCard(card: CardRow, condition: Condition): Promise<PriceQuote> {
   const set = findSet(card.setId) ?? findSet(card.seasonKey) ?? findSet(card.setCode);
-  const settings = getSettings();
+  const settings = await getSettings();
   if (card.language === "en") {
     return quoteEnglish(card, condition, set?.ptcgId ?? null, settings);
   }
@@ -36,7 +36,7 @@ async function quoteEnglish(
   card: CardRow,
   condition: Condition,
   ptcgId: string | null,
-  settings: ReturnType<typeof getSettings>,
+  settings: PriceSettings,
 ): Promise<PriceQuote> {
   if (!ptcgId) {
     return {
@@ -91,7 +91,7 @@ async function quoteJapanese(
   card: CardRow,
   condition: Condition,
   cardrushCode: string,
-  settings: ReturnType<typeof getSettings>,
+  settings: PriceSettings,
 ): Promise<PriceQuote> {
   const searchUrl = cardrushSearchUrl(cardrushCode, card.number);
   try {
@@ -143,7 +143,7 @@ export async function priceFromManualSource(input: {
   condition: Condition;
   conditionPriced: boolean;
 }) {
-  const settings = getSettings();
+  const settings = await getSettings();
   return computeVnd({
     sourcePrice: input.sourcePrice,
     currency: input.currency,

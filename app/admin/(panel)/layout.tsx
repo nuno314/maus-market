@@ -5,8 +5,8 @@ import { countNewOrders } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const fresh = countNewOrders();
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  const fresh = await countNewOrders();
   return (
     <div className="min-h-full flex-1">
       <header className="border-b border-[#d5e3f0] bg-white">

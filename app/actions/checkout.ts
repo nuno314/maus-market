@@ -48,7 +48,7 @@ export async function placeOrderAction(formData: FormData): Promise<CheckoutResu
   }
 
   try {
-    const order = placeOrder({
+    const order = await placeOrder({
       lines,
       zaloPhone,
       zaloName,

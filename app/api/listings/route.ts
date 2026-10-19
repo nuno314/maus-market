@@ -9,5 +9,5 @@ export async function GET(request: Request) {
     .map((part) => Number(part))
     .filter((id) => Number.isInteger(id) && id > 0)
     .slice(0, 50);
-  return Response.json(getListingsByIds(parsed));
+  return Response.json(await getListingsByIds(parsed));
 }

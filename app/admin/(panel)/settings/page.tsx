@@ -14,7 +14,7 @@ export default async function SettingsPage({
   const query = await searchParams;
   const fx = query.fx === "1";
   const fxError = query.fxError === "1";
-  const settings = getSettings();
+  const settings = await getSettings();
 
   return (
     <div className="grid gap-4">

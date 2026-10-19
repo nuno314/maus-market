@@ -22,6 +22,8 @@ export const cards = sqliteTable("cards", {
   name: text("name").notNull(),
   imageUrl: text("image_url").notNull(),
   manual: integer("manual").notNull().default(0),
+  category: text("category").notNull().default("card"),
+  description: text("description").notNull().default(""),
 });
 
 export const listings = sqliteTable("listings", {
@@ -61,6 +63,8 @@ export const orderItems = sqliteTable("order_items", {
   condition: text("condition").notNull(),
   imageUrl: text("image_url").notNull(),
   number: text("number").notNull(),
+  category: text("category").notNull().default("card"),
+  description: text("description").notNull().default(""),
   quantity: integer("quantity").notNull(),
   unitPriceVnd: integer("unit_price_vnd").notNull(),
 });

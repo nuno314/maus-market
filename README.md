@@ -18,4 +18,12 @@ Mở http://127.0.0.1:4317
 
 Tài khoản admin mặc định: `admin` / `maus-admin`. Đổi trong file `.env` (xem `.env.example`) rồi khởi động lại server.
 
-Database SQLite nằm ở `data/maus.db` và không được commit. Lần đầu vào Kho, bấm **Đồng bộ catalog** để tải tên và ảnh các set Mega Evolution. Ảnh tiếng Nhật lấy từ Limitless khi TCGdex chưa có scan. Nếu Cardrush chặn máy chủ, nhập giá yên bằng tay.
+Chưa có `TURSO_DATABASE_URL` thì database là file SQLite `data/maus.db` (không commit). Có URL Turso thì app dùng database đó. Ảnh upload lưu ở `public/uploads` khi chưa có `BLOB_READ_WRITE_TOKEN`. Lần đầu vào Kho, bấm **Đồng bộ catalog** để tải tên và ảnh các set Mega Evolution. Ảnh tiếng Nhật lấy từ Limitless khi TCGdex chưa có scan. Nếu Cardrush chặn máy chủ, nhập giá yên bằng tay.
+
+## Deploy Vercel
+
+Tạo database trên [Turso](https://turso.tech) và một Blob store trong project Vercel, rồi đặt các biến trong `.env.example`:
+
+- `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`
+- `BLOB_READ_WRITE_TOKEN` (Vercel điền khi gắn Blob store)
+- `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `SESSION_SECRET`

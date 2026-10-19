@@ -7,13 +7,12 @@ import { placeOrderAction } from "@/app/actions/checkout";
 import { useListingRows } from "@/components/cart-view";
 import { CardThumb } from "@/components/card-thumb";
 import { useCart } from "@/components/cart-provider";
-import { ConditionBadge } from "@/components/condition-badge";
+import { ProductMeta } from "@/components/product-meta";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { formatVnd } from "@/lib/money";
-import { setCaption } from "@/lib/sets";
 
 export function CheckoutForm() {
   const cart = useCart();
@@ -121,11 +120,9 @@ export function CheckoutForm() {
               <CardThumb src={line.listing.imageUrl} alt={line.listing.name} className="h-20 w-14 rounded-md" />
               <div className="min-w-0">
                 <p className="font-bold leading-snug">{line.listing.name}</p>
-                <p className="text-xs text-[#5d7388]">{setCaption(line.listing)}</p>
-                <div className="mt-1 flex items-center gap-2">
-                  <ConditionBadge condition={line.listing.condition} />
-                  <span className="text-xs">× {line.quantity}</span>
-                </div>
+                {line.listing.description ? <p className="line-clamp-2 text-xs text-[#5d7388]">{line.listing.description}</p> : null}
+                <ProductMeta item={line.listing} captionClassName="text-xs text-[#5d7388]" />
+                <p className="mt-1 text-xs">× {line.quantity}</p>
                 <p className="mt-1 text-sm font-bold">{formatVnd(line.listing.priceVnd * line.quantity)}</p>
               </div>
             </li>

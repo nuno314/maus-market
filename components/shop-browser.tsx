@@ -4,25 +4,27 @@ import { useState } from "react";
 import { Search } from "lucide-react";
 import { CardThumb } from "@/components/card-thumb";
 import { useCart } from "@/components/cart-provider";
-import { ConditionBadge } from "@/components/condition-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatVnd } from "@/lib/money";
-import { SEASONS, languageLabel, setCaption, type Language } from "@/lib/sets";
+import { ProductMeta } from "@/components/product-meta";
+import { CATEGORIES, ERAS, SEASONS, languageLabel, type Category, type Language } from "@/lib/sets";
 import type { ShopListing } from "@/lib/store";
 
 export function ShopBrowser({ listings }: { listings: ShopListing[] }) {
   const [query, setQuery] = useState("");
   const [language, setLanguage] = useState<"all" | Language>("all");
   const [season, setSeason] = useState("all");
+  const [category, setCategory] = useState<"all" | Category>("all");
   const seasons = SEASONS.filter((item) => language === "all" || item.language === language);
 
   const needle = query.trim().toLowerCase();
   const visible = listings.filter((item) => {
     if (language !== "all" && item.language !== language) return false;
     if (season !== "all" && item.seasonKey !== season) return false;
+    if (category !== "all" && item.category !== category) return false;
     if (!needle) return true;
-    const hay = `${item.name} ${item.number} ${item.setName} ${item.setCode}`.toLowerCase();
+    const hay = `${item.name} ${item.number} ${item.setName} ${item.setCode} ${item.description}`.toLowerCase();
     return hay.includes(needle);
   });
 
@@ -41,7 +43,7 @@ export function ShopBrowser({ listings }: { listings: ShopListing[] }) {
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Tìm tên lá, ví dụ Charizard hoặc ピカチュウ"
+            placeholder="Tìm tên, ví dụ Charizard hoặc booster box"
             className="h-11 rounded-full pl-9"
             aria-label="Tìm tên lá bài"
           />
@@ -68,46 +70,86 @@ export function ShopBrowser({ listings }: { listings: ShopListing[] }) {
         </div>
       </div>
 
-      <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-        <SeasonChip active={season === "all"} onClick={() => setSeason("all")}>
-          Mọi mùa
-        </SeasonChip>
-        {seasons.map((item) => (
-          <SeasonChip key={item.key} active={season === item.key} onClick={() => setSeason(item.key)}>
-            {item.label}
-          </SeasonChip>
-        ))}
+      <div className="mt-3 grid gap-3" role="group" aria-label="Lọc theo mùa">
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setSeason("all")}
+            className={`rounded-full px-3 py-1.5 text-sm font-semibold ring-1 ${
+              season === "all" ? "bg-[#d7ebf8] text-[#1a4f86] ring-[#9ec7e8]" : "bg-white text-[#3e5870] ring-[#d5e3f0]"
+            }`}
+          >
+            Mọi mùa
+          </button>
+        </div>
+        {ERAS.map((era) => {
+          const items = seasons.filter((item) => item.era === era.id);
+          if (items.length === 0) return null;
+          return (
+            <div key={era.id}>
+              <p className="mb-2 text-xs font-semibold text-[#5d7388]">{era.label}</p>
+              <div className="flex flex-wrap gap-2">
+                {items.map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => setSeason(item.key)}
+                    className={`rounded-full px-3 py-1.5 text-sm font-semibold ring-1 ${
+                      season === item.key ? "bg-[#d7ebf8] text-[#1a4f86] ring-[#9ec7e8]" : "bg-white text-[#3e5870] ring-[#d5e3f0]"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </div>
+      <label className="mt-3 grid max-w-xs gap-1 text-xs font-semibold text-[#5d7388]">
+        Loại
+        <select
+          value={category}
+          onChange={(event) => setCategory(event.target.value as "all" | Category)}
+          className="h-11 rounded-full border border-[#d5e3f0] bg-white px-3 text-sm font-semibold text-[#1c2b3a]"
+          aria-label="Lọc theo loại sản phẩm"
+        >
+          <option value="all">Mọi loại</option>
+          {CATEGORIES.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.label}
+            </option>
+          ))}
+        </select>
+      </label>
       <p className="mt-2 text-xs text-[#5d7388]">
-        A gần như mới, A- xước nhẹ, B đã chơi rõ. Giá tiếng Anh theo TCGPlayer, tiếng Nhật theo Cardrush, hiển thị bằng VND.
+        Thẻ dùng condition A gần như mới, A- xước nhẹ, B đã chơi rõ. Hộp và pack không dùng condition. Giá hiển thị bằng VND.
       </p>
 
       {listings.length === 0 ? (
         <EmptyState
           title="Kho đang trống"
-          body="Khi admin đăng thẻ Mega Evolution đang có, lá sẽ hiện ở đây kèm ảnh và giá."
+          body="Khi admin đăng thẻ, hộp hoặc pack đang có, sản phẩm sẽ hiện ở đây kèm ảnh và giá."
         />
       ) : visible.length === 0 ? (
-        <EmptyState title="Không thấy lá nào" body="Thử tên khác, hoặc bỏ lọc mùa." />
+        <EmptyState title="Không thấy sản phẩm nào" body="Thử tên khác, hoặc bỏ lọc mùa và loại." />
       ) : (
         <>
-          <p className="mt-4 text-sm font-semibold text-[#3e5870]">{visible.length} thẻ đang có</p>
+          <p className="mt-4 text-sm font-semibold text-[#3e5870]">{visible.length} sản phẩm đang có</p>
           <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {visible.map((listing) => (
               <li key={listing.id} className="flex flex-col rounded-2xl bg-white p-2.5 shadow-sm ring-1 ring-[#d5e3f0]">
                 <CardThumb
                   src={listing.imageUrl}
                   alt={listing.name}
-                  className="aspect-[63/88] w-full rounded-xl"
+                  className={listing.category === "card" ? "aspect-[63/88] w-full rounded-xl" : "aspect-square w-full rounded-xl"}
                 />
                 <div className="mt-2 flex flex-1 flex-col gap-1">
                   <p className="line-clamp-2 text-sm font-bold leading-snug">{listing.name}</p>
-                  <p className="text-xs text-[#5d7388]">
-                    {setCaption(listing)} · #{listing.number}
-                  </p>
+                  {listing.description ? <p className="line-clamp-2 text-xs text-[#5d7388]">{listing.description}</p> : null}
+                  <ProductMeta item={listing} captionClassName="text-xs text-[#5d7388]" />
                   <p className="text-xs text-[#5d7388]">{languageLabel(listing.language)}</p>
-                  <div className="mt-1 flex items-center justify-between gap-2">
-                    <ConditionBadge condition={listing.condition} />
+                  <div className="mt-1 flex items-center justify-end gap-2">
                     <span className="text-xs text-[#5d7388]">Còn {listing.quantity}</span>
                   </div>
                   <p className="mt-1 text-base font-extrabold text-[#1c2b3a]">{formatVnd(listing.priceVnd)}</p>
@@ -119,28 +161,6 @@ export function ShopBrowser({ listings }: { listings: ShopListing[] }) {
         </>
       )}
     </div>
-  );
-}
-
-function SeasonChip({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`shrink-0 rounded-full px-3 py-1.5 text-sm font-semibold ring-1 ${
-        active ? "bg-[#d7ebf8] text-[#1a4f86] ring-[#b7d4ea]" : "bg-white text-[#3e5870] ring-[#d5e3f0]"
-      }`}
-    >
-      {children}
-    </button>
   );
 }
 

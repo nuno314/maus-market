@@ -2,6 +2,7 @@ export function cardImageSrc(url: string | null | undefined, size: "low" | "high
   if (!url) return "";
   const trimmed = url.trim();
   if (!trimmed) return "";
+  if (trimmed.startsWith("blob:") || trimmed.startsWith("data:") || trimmed.startsWith("/")) return trimmed;
   if (/\.(png|jpe?g|webp|gif)(\?|#|$)/i.test(trimmed)) return trimmed;
   return `${trimmed.replace(/\/$/, "")}/${size}.webp`;
 }

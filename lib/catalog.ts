@@ -52,7 +52,7 @@ export async function syncCatalog(): Promise<SyncReport> {
         const number = card.localId || card.id.split("-").pop() || "";
         const imageUrl = card.image || fallbackImage(set, number);
         if (!imageUrl) continue;
-        upsertCatalogCard({
+        await upsertCatalogCard({
           id: card.id,
           language: set.language,
           setId: set.tcgdexId,
@@ -88,7 +88,8 @@ function fallbackImage(set: SetDef, number: string): string {
     return `https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/tpc/${code}/${code}_${numeric}_R_JP_LG.png`;
   }
   if (set.tcgdexId) {
-    return `https://assets.tcgdex.net/${set.language}/me/${set.tcgdexId}/${number}`;
+    const series = set.language === "ja" ? (set.era === "sv" ? "SV" : "M") : set.era;
+    return `https://assets.tcgdex.net/${set.language}/${series}/${set.tcgdexId}/${number}`;
   }
   return "";
 }
@@ -114,7 +115,7 @@ async function syncM6a(): Promise<number> {
       const number = numbers[cursor];
       cursor += 1;
       const name = await limitlessCardName(number);
-      upsertCatalogCard({
+      await upsertCatalogCard({
         id: `M6a-${String(number).padStart(3, "0")}`,
         language: "ja",
         setId: "M6A",

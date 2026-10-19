@@ -8,6 +8,7 @@ import { fetchFxRates } from "@/lib/fx";
 import { priceFromManualSource, quoteCard } from "@/lib/pricing";
 import { SESSION_COOKIE, credentialsMatch, readSession, signSession } from "@/lib/session";
 import { findSet, type Condition } from "@/lib/sets";
+import { saveUploadedImage } from "@/lib/uploads";
 import {
   deleteListing,
   getCard,
@@ -24,10 +25,12 @@ import {
 } from "@/lib/store";
 import {
   isValidName,
+  parseCategory,
   parseCondition,
   parseHttpUrl,
   parseMoney,
   parseQuantity,
+  parseVnd,
 } from "@/lib/validate";
 
 export type ActionState = { error?: string; ok?: string } | null;
@@ -81,7 +84,7 @@ export async function createListingAction(
   formData: FormData,
 ): Promise<ActionState> {
   await requireAdmin();
-  const card = getCard(String(formData.get("cardId") ?? ""));
+  const card = await getCard(String(formData.get("cardId") ?? ""));
   const condition = parseCondition(formData.get("condition"));
   const quantity = parseQuantity(formData.get("quantity"));
   if (!card || !condition || quantity === null || quantity < 1) {
@@ -90,7 +93,7 @@ export async function createListingAction(
   const priced = await resolvePrice(card.language, condition, formData, () => quoteCard(card, condition));
   if ("error" in priced) return priced;
   try {
-    saveListing({
+    await saveListing({
       cardId: card.id,
       condition,
       quantity,
@@ -112,24 +115,34 @@ export async function createManualListingAction(
 ): Promise<ActionState> {
   await requireAdmin();
   const set = findSet(String(formData.get("setId") ?? ""));
-  const condition = parseCondition(formData.get("condition"));
+  const category = parseCategory(formData.get("category"));
+  const condition = category && category !== "card" ? "A" : parseCondition(formData.get("condition"));
   const quantity = parseQuantity(formData.get("quantity"));
   const name = String(formData.get("name") ?? "").trim();
-  const number = String(formData.get("number") ?? "").trim();
-  const imageUrl = parseHttpUrl(String(formData.get("imageUrl") ?? ""));
-  if (!set || !condition || quantity === null || quantity < 1) {
-    return { error: "Điền đủ set, condition và số lượng." };
+  const description = String(formData.get("description") ?? "").trim();
+  const priceVnd = parseVnd(formData.get("priceVnd"));
+  const number = category === "card" ? String(formData.get("number") ?? "").trim() : "";
+  const uploaded = formData.get("image");
+  let imageUrl: string | null = null;
+  if (uploaded instanceof File && uploaded.size > 0) {
+    imageUrl = await saveUploadedImage(uploaded);
+    if (!imageUrl) return { error: "Ảnh cần là JPG, PNG, WEBP hoặc GIF, tối đa 5 MB." };
+  } else {
+    imageUrl = parseHttpUrl(String(formData.get("imageUrl") ?? ""));
   }
-  const language = set.language;
-  if (!isValidName(name) || !number || number.length > 12) {
-    return { error: "Tên lá và số thẻ chưa hợp lệ." };
+  if (!set || !category || !condition || quantity === null || quantity < 1) {
+    return { error: "Điền đủ mùa, loại sản phẩm và số lượng." };
   }
+  if (!isValidName(name) || (category === "card" && (!number || number.length > 12))) {
+    return { error: category === "card" ? "Tên lá và số thẻ chưa hợp lệ." : "Tên sản phẩm chưa hợp lệ." };
+  }
+  if (description.length > 400) return { error: "Mô tả tối đa 400 ký tự." };
   if (!imageUrl) {
-    return { error: "Cần link ảnh http hoặc https để khách nhận ra lá." };
+    return { error: "Chọn file ảnh hoặc dán link ảnh http/https." };
   }
-  const draft = {
-    id: "draft",
-    language,
+  if (!priceVnd) return { error: "Giá bán VND cần từ 1.000 đến 100.000.000." };
+  const card = await insertManualCard({
+    language: set.language,
     setId: set.tcgdexId ?? set.seasonKey,
     setName: set.name,
     setCode: set.code,
@@ -137,13 +150,21 @@ export async function createManualListingAction(
     number,
     name,
     imageUrl,
-    manual: 1,
-  };
-  const priced = await resolvePrice(language, condition, formData, () => quoteCard(draft, condition));
-  if ("error" in priced) return priced;
-  const card = insertManualCard(draft);
+    category,
+    description,
+  });
   try {
-    saveListing({ cardId: card.id, condition, quantity, ...priced });
+    await saveListing({
+      cardId: card.id,
+      condition,
+      quantity,
+      sourcePrice: priceVnd,
+      sourceCurrency: "VND",
+      sourceUrl: null,
+      sourceLabel: "Giá nhập tay",
+      conditionPriced: true,
+      priceVnd,
+    });
   } catch (error) {
     if (error instanceof Error && error.message === "DUPLICATE") {
       return { error: "Listing condition này đã tồn tại." };
@@ -209,7 +230,7 @@ export async function updateQuantityAction(formData: FormData) {
   const id = Number(formData.get("id"));
   const quantity = parseQuantity(formData.get("quantity"));
   if (!Number.isInteger(id) || quantity === null) return;
-  updateListingQuantity(id, quantity);
+  await updateListingQuantity(id, quantity);
   refreshShop();
 }
 
@@ -217,35 +238,38 @@ export async function deleteListingAction(formData: FormData) {
   await requireAdmin();
   const id = Number(formData.get("id"));
   if (!Number.isInteger(id)) return;
-  deleteListing(id);
+  await deleteListing(id);
   refreshShop();
 }
 
 export async function refreshListingAction(formData: FormData) {
   await requireAdmin();
   const id = Number(formData.get("id"));
-  const listing = getListing(id);
+  const listing = await getListing(id);
   if (!listing) return;
-  const card = getCard(listing.cardId);
+  const card = await getCard(listing.cardId);
   if (!card) return;
+  if (listing.sourceCurrency === "VND" || card.category !== "card") {
+    redirect("/admin?priceError=" + encodeURIComponent("Sản phẩm giá nhập tay không lấy giá market."));
+  }
   const quote = await quoteCard(card, listing.condition);
   if (!quote.ok) {
     redirect(`/admin?priceError=${encodeURIComponent(quote.message)}`);
   }
-  updateListingPrice(id, quote);
+  await updateListingPrice(id, quote);
   refreshShop();
   redirect("/admin?priced=1");
 }
 
 export async function refreshAllPricesAction() {
   await requireAdmin();
-  const rows = listAllListings();
+  const rows = await listAllListings();
   let updated = 0;
   let failed = 0;
   for (const row of rows) {
-    const card = getCard(row.cardId);
-    if (!card) {
-      failed += 1;
+    const card = await getCard(row.cardId);
+    if (!card || card.category !== "card" || row.sourceCurrency === "VND") {
+      if (!card) failed += 1;
       continue;
     }
     const quote = await quoteCard(card, row.condition);
@@ -253,7 +277,7 @@ export async function refreshAllPricesAction() {
       failed += 1;
       continue;
     }
-    updateListingPrice(row.id, quote);
+    await updateListingPrice(row.id, quote);
     updated += 1;
   }
   refreshShop();
@@ -262,7 +286,7 @@ export async function refreshAllPricesAction() {
 
 export async function saveSettingsAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   await requireAdmin();
-  const current = getSettings();
+  const current = await getSettings();
   const usdVnd = Number(formData.get("usdVnd"));
   const jpyVnd = Number(formData.get("jpyVnd"));
   const markupPercent = Number(formData.get("markupPercent"));
@@ -277,7 +301,7 @@ export async function saveSettingsAction(_prev: ActionState, formData: FormData)
   if ([factorA, factorAMinus, factorB].some((factor) => factor <= 0 || factor > 2)) {
     return { error: "Hệ số condition phải trong khoảng 0 đến 2." };
   }
-  saveSettings({
+  await saveSettings({
     ...current,
     usdVnd,
     jpyVnd,
@@ -293,8 +317,8 @@ export async function saveSettingsAction(_prev: ActionState, formData: FormData)
 export async function refreshFxAction(): Promise<void> {
   await requireAdmin();
   const rates = await fetchFxRates();
-  const current = getSettings();
-  saveSettings({ ...current, usdVnd: rates.usdVnd, jpyVnd: rates.jpyVnd });
+  const current = await getSettings();
+  await saveSettings({ ...current, usdVnd: rates.usdVnd, jpyVnd: rates.jpyVnd });
   revalidatePath("/admin/settings");
   redirect("/admin/settings?fx=1");
 }
@@ -305,7 +329,7 @@ export async function updateOrderStatusAction(formData: FormData) {
   const status = String(formData.get("status") ?? "") as OrderStatus;
   if (!Number.isInteger(id)) return;
   if (!["new", "confirmed", "done", "cancelled"].includes(status)) return;
-  setOrderStatus(id, status);
+  await setOrderStatus(id, status);
   revalidatePath("/admin/orders");
   revalidatePath(`/admin/orders/${id}`);
   revalidatePath("/");

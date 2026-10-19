@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import {
   createListingAction,
   createManualListingAction,
@@ -11,8 +11,9 @@ import { SubmitButton } from "@/components/submit-button";
 import { CardThumb } from "@/components/card-thumb";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { formatSource, formatVnd, type PriceSettings } from "@/lib/money";
-import { CONDITIONS, SEASONS, setCaption, type Condition } from "@/lib/sets";
+import { CATEGORIES, CONDITIONS, ERAS, SEASONS, setCaption, type Category, type Condition } from "@/lib/sets";
 import type { CardRow } from "@/lib/store";
 import type { PriceQuote } from "@/lib/pricing";
 
@@ -135,65 +136,130 @@ export function CreateListingForm({
   );
 }
 
+const selectClass = `${field} w-full border border-[#d5e3f0] px-3`;
+const chipClass = (active: boolean) =>
+  `rounded-full px-3 py-1.5 text-sm font-semibold ring-1 ${
+    active ? "bg-[#24344a] text-white ring-[#24344a]" : "bg-white text-[#3e5870] ring-[#d5e3f0]"
+  }`;
+
 export function ManualListingForm() {
   const [state, action] = useActionState(createManualListingAction, null);
+  const [category, setCategory] = useState<Category>("card");
+  const [setId, setSetId] = useState(SEASONS[0]?.key ?? "");
+  const [preview, setPreview] = useState<string | null>(null);
+  const isCard = category === "card";
+
   return (
-    <details className="rounded-3xl bg-white p-4 ring-1 ring-[#d5e3f0]">
-      <summary className="cursor-pointer font-extrabold">Thêm lá chưa có trong catalog</summary>
-      <p className="mt-2 text-sm text-[#5d7388]">Dùng cho M6A hoặc lá TCGdex chưa có. Dán link ảnh và giá USD hoặc yên.</p>
+    <section className="rounded-3xl bg-white p-4 ring-1 ring-[#d5e3f0] sm:p-5">
+      <h2 className="font-extrabold">Đăng tay</h2>
+      <p className="mt-1 text-sm text-[#5d7388]">
+        Nhập thẻ, booster box, box seal, box unseal hoặc pack lẻ. Chọn mùa trong danh sách và tải ảnh lên.
+      </p>
       <form action={action} className="mt-3 grid gap-3">
-        <div className="grid gap-1.5">
-          <Label htmlFor="setId">Mùa</Label>
-          <select id="setId" name="setId" className={`${field} w-full border px-3`} required>
-            {SEASONS.map((season) => (
-              <option key={season.key} value={season.key}>
-                {season.language === "ja" ? `${season.label} · tiếng Nhật` : season.label}
-              </option>
-            ))}
-          </select>
-        </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="grid gap-1.5">
-            <Label htmlFor="name">Tên lá</Label>
-            <Input id="name" name="name" required className={field} />
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="number">Số</Label>
-            <Input id="number" name="number" required className={field} placeholder="003" />
-          </div>
-        </div>
-        <div className="grid gap-1.5">
-          <Label htmlFor="imageUrl">Link ảnh</Label>
-          <Input id="imageUrl" name="imageUrl" type="url" required className={field} placeholder="https://" />
-        </div>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div className="grid gap-1.5">
-            <Label htmlFor="manual-condition">Condition</Label>
-            <select id="manual-condition" name="condition" className={`${field} w-full border px-3`} defaultValue="A">
-              {CONDITIONS.map((condition) => (
-                <option key={condition} value={condition}>
-                  {condition}
+            <Label htmlFor="category">Loại</Label>
+            <select
+              id="category"
+              name="category"
+              className={selectClass}
+              value={category}
+              onChange={(event) => setCategory(event.target.value as Category)}
+            >
+              {CATEGORIES.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
                 </option>
               ))}
             </select>
           </div>
+          <div className="grid gap-2 sm:col-span-2">
+            <Label>Mùa</Label>
+            <input type="hidden" name="setId" value={setId} />
+            {ERAS.map((era) => (
+              <div key={era.id}>
+                <p className="mb-2 text-xs font-semibold text-[#5d7388]">{era.label}</p>
+                <div className="flex flex-wrap gap-2">
+                  {SEASONS.filter((item) => item.era === era.id).map((item) => (
+                    <button key={item.key} type="button" className={chipClass(setId === item.key)} onClick={() => setSetId(item.key)}>
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className={`grid gap-3 ${isCard ? "sm:grid-cols-2" : ""}`}>
+          <div className="grid gap-1.5">
+            <Label htmlFor="name">{isCard ? "Tên lá" : "Tên sản phẩm"}</Label>
+            <Input id="name" name="name" required className={field} placeholder={isCard ? "Charizard ex" : "Booster box"} />
+          </div>
+          {isCard ? (
+            <div className="grid gap-1.5">
+              <Label htmlFor="number">Số</Label>
+              <Input id="number" name="number" required className={field} placeholder="003" />
+            </div>
+          ) : (
+            <input type="hidden" name="number" value="" />
+          )}
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="description">Mô tả</Label>
+          <Textarea id="description" name="description" maxLength={400} rows={3} className="rounded-xl bg-white" placeholder="Tình trạng hộp, seal, nội dung đi kèm..." />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-1.5">
+            <Label htmlFor="image">Ảnh</Label>
+            <Input
+              id="image"
+              name="image"
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              className={field}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                setPreview((current) => {
+                  if (current) URL.revokeObjectURL(current);
+                  return file ? URL.createObjectURL(file) : null;
+                });
+              }}
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="imageUrl">Hoặc link ảnh</Label>
+            <Input id="imageUrl" name="imageUrl" type="url" className={field} placeholder="https://" />
+          </div>
+        </div>
+        {preview ? <CardThumb src={preview} alt="" className="h-36 w-28 rounded-xl" /> : null}
+        <div className={`grid gap-3 ${isCard ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+          {isCard ? (
+            <div className="grid gap-1.5">
+              <Label htmlFor="manual-condition">Condition</Label>
+              <select id="manual-condition" name="condition" className={selectClass} defaultValue="A">
+                {CONDITIONS.map((condition) => (
+                  <option key={condition} value={condition}>
+                    {condition}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <input type="hidden" name="condition" value="A" />
+          )}
           <div className="grid gap-1.5">
             <Label htmlFor="manual-qty">Số lượng</Label>
             <Input id="manual-qty" name="quantity" type="number" min={1} max={99} defaultValue={1} required className={field} />
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor="manual-price">Giá nguồn</Label>
-            <Input id="manual-price" name="sourcePrice" inputMode="decimal" required className={field} placeholder="USD hoặc JPY" />
+            <Label htmlFor="manual-price">Giá bán (VND)</Label>
+            <Input id="manual-price" name="priceVnd" inputMode="numeric" required className={field} placeholder="1500000" />
           </div>
         </div>
-        <label className="flex items-start gap-2 text-sm">
-          <input type="checkbox" name="conditionPriced" value="1" defaultChecked className="mt-1" />
-          <span>Giá này đã là giá của condition đang bán.</span>
-        </label>
         {state?.error ? <p className="text-sm font-semibold text-[#8a3b3b]">{state.error}</p> : null}
-        <SubmitButton className="h-11 rounded-full">Lưu lá thủ công</SubmitButton>
+        <SubmitButton className="h-11 rounded-full">Đăng lên shop</SubmitButton>
       </form>
-    </details>
+    </section>
   );
 }
 

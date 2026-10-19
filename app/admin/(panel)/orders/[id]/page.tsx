@@ -2,9 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { updateOrderStatusAction } from "@/app/actions/admin";
 import { CardThumb } from "@/components/card-thumb";
-import { ConditionBadge } from "@/components/condition-badge";
+import { ProductMeta } from "@/components/product-meta";
 import { formatVnd, formatWhen } from "@/lib/money";
-import { setCaption } from "@/lib/sets";
 import { getOrder, type OrderStatus } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +17,7 @@ const statuses: { value: OrderStatus; label: string }[] = [
 
 export default async function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const order = getOrder(Number(id));
+  const order = await getOrder(Number(id));
   if (!order) notFound();
 
   return (
@@ -76,12 +75,16 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
             <CardThumb src={item.imageUrl} alt={item.cardName} className="h-24 w-16 rounded-lg" />
             <div>
               <p className="font-bold">{item.cardName}</p>
-              <p className="text-sm text-[#5d7388]">
-                {setCaption({ language: item.language, setCode: item.setCode, setName: item.setName })} · #{item.number}
-              </p>
-              <div className="mt-1">
-                <ConditionBadge condition={item.condition} />
-              </div>
+              {item.description ? <p className="line-clamp-2 text-xs text-[#5d7388]">{item.description}</p> : null}
+              <ProductMeta
+                item={{
+                  setCode: item.setCode,
+                  setName: item.setName,
+                  number: item.number,
+                  category: item.category,
+                  condition: item.condition,
+                }}
+              />
               <p className="mt-2 text-sm font-bold">
                 {item.quantity} × {formatVnd(item.unitPriceVnd)}
               </p>

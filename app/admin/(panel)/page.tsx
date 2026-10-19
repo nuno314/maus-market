@@ -8,7 +8,7 @@ import {
 } from "@/app/actions/admin";
 import { CreateListingForm, ManualListingForm } from "@/components/admin-forms";
 import { CardThumb } from "@/components/card-thumb";
-import { ConditionBadge } from "@/components/condition-badge";
+import { ProductMeta } from "@/components/product-meta";
 import { SubmitButton } from "@/components/submit-button";
 import { Input } from "@/components/ui/input";
 import { formatSource, formatVnd } from "@/lib/money";
@@ -32,18 +32,18 @@ export default async function AdminHomePage({
   const cardId = one(query.card);
   const conditionRaw = one(query.condition);
   const condition: Condition = CONDITIONS.includes(conditionRaw as Condition) ? (conditionRaw as Condition) : "A";
-  const catalogCount = countCards();
-  const results = q ? searchCards(q) : [];
-  const selected = cardId ? getCard(cardId) : null;
+  const catalogCount = await countCards();
+  const results = q ? await searchCards(q) : [];
+  const selected = cardId ? await getCard(cardId) : null;
   const quote = selected ? await quoteCard(selected, condition) : null;
-  const stock = listAllListings();
+  const stock = await listAllListings();
 
   return (
     <div className="grid gap-6">
       <div>
-        <h1 className="text-2xl font-extrabold">Kho thẻ</h1>
+        <h1 className="text-2xl font-extrabold">Kho</h1>
         <p className="text-sm text-[#5d7388]">
-          Catalog đang có {catalogCount} lá. Đăng những lá bạn đang cầm, kèm condition và giá thị trường.
+          Catalog đang có {catalogCount} lá. Đăng tay thẻ, hộp hoặc pack, kèm ảnh và giá.
         </p>
       </div>
 
@@ -52,8 +52,8 @@ export default async function AdminHomePage({
       <section className="rounded-3xl bg-white p-4 ring-1 ring-[#d5e3f0] sm:p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="font-extrabold">Đồng bộ catalog Mega Evolution</h2>
-            <p className="text-sm text-[#5d7388]">Tải tên, số và ảnh từ TCGdex. M6A thêm tay nếu chưa có.</p>
+            <h2 className="font-extrabold">Đồng bộ catalog</h2>
+            <p className="text-sm text-[#5d7388]">Tải tên, số và ảnh Scarlet & Violet và Mega Evolution từ TCGdex. M6A thêm tay nếu chưa có.</p>
           </div>
           <form action={syncCatalogAction}>
             <SubmitButton className="h-11 rounded-full" pendingLabel="Đang tải set…">
@@ -121,15 +121,17 @@ export default async function AdminHomePage({
                 <CardThumb src={listing.imageUrl} alt={listing.name} className="h-28 w-20 rounded-lg" />
                 <div className="min-w-0 flex-1">
                   <p className="font-extrabold">{listing.name}</p>
-                  <p className="text-sm text-[#5d7388]">
-                    {setCaption(listing)} · #{listing.number}
-                  </p>
-                  <div className="mt-1">
-                    <ConditionBadge condition={listing.condition} />
-                  </div>
+                  {listing.description ? <p className="line-clamp-2 text-sm text-[#5d7388]">{listing.description}</p> : null}
+                  <ProductMeta item={listing} />
                   <p className="mt-2 text-sm">
-                    {listing.sourcePrice !== null ? formatSource(listing.sourcePrice, listing.sourceCurrency) : "—"} ·{" "}
-                    <span className="font-extrabold">{formatVnd(listing.priceVnd)}</span>
+                    {listing.sourceCurrency === "VND" ? (
+                      <span className="font-extrabold">{formatVnd(listing.priceVnd)}</span>
+                    ) : (
+                      <>
+                        {listing.sourcePrice !== null ? formatSource(listing.sourcePrice, listing.sourceCurrency) : "—"} ·{" "}
+                        <span className="font-extrabold">{formatVnd(listing.priceVnd)}</span>
+                      </>
+                    )}
                   </p>
                   <p className="text-xs text-[#5d7388]">{listing.sourceLabel}</p>
                   <div className="mt-3 flex flex-wrap items-end gap-2">
@@ -143,12 +145,14 @@ export default async function AdminHomePage({
                         Lưu
                       </SubmitButton>
                     </form>
-                    <form action={refreshListingAction}>
-                      <input type="hidden" name="id" value={listing.id} />
-                      <SubmitButton variant="outline" className="h-10 rounded-full" pendingLabel="…">
-                        Cập nhật giá
-                      </SubmitButton>
-                    </form>
+                    {listing.category === "card" && listing.sourceCurrency !== "VND" ? (
+                      <form action={refreshListingAction}>
+                        <input type="hidden" name="id" value={listing.id} />
+                        <SubmitButton variant="outline" className="h-10 rounded-full" pendingLabel="…">
+                          Cập nhật giá
+                        </SubmitButton>
+                      </form>
+                    ) : null}
                     <form action={deleteListingAction}>
                       <input type="hidden" name="id" value={listing.id} />
                       <SubmitButton variant="ghost" className="h-10 rounded-full text-[#8a3b3b]" pendingLabel="…">
@@ -177,7 +181,7 @@ function Notice({ query }: { query: Record<string, string | string[] | undefined
   return (
     <div className="rounded-2xl bg-[#eef7f1] px-4 py-3 text-sm text-[#24573a]">
       {synced ? <p>Đã lưu {synced} lá từ catalog.{skip ? ` Chưa đồng bộ: ${skip}.` : ""}</p> : null}
-      {listed ? <p>Đã đăng lá lên shop.</p> : null}
+      {listed ? <p>Đã đăng sản phẩm lên shop.</p> : null}
       {priced ? (
         <p>
           Đã cập nhật giá{priceFailed ? `, ${priceFailed} lá giữ giá cũ vì không lấy được nguồn` : ""}.
