@@ -6,6 +6,9 @@ const styles: Record<string, string> = {
   "box-seal": "bg-[#e7f6ee] text-[#1f6b45]",
   "box-unseal": "bg-[#fff1d0] text-[#8a5b00]",
   pack: "bg-[#efe7f8] text-[#5b3d78]",
+  binder: "bg-[#f3e6d8] text-[#7a4b24]",
+  sleeves: "bg-[#e4eef8] text-[#2d5578]",
+  "top-loader": "bg-[#e5f4f2] text-[#1d6660]",
 };
 
 export function CategoryBadge({ category }: { category: string }) {

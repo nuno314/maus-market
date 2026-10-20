@@ -13,7 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { formatSource, formatVnd, type PriceSettings } from "@/lib/money";
-import { CATEGORIES, CONDITIONS, ERAS, SEASONS, setCaption, type Category, type Condition } from "@/lib/sets";
+import { SeasonNav } from "@/components/season-nav";
+import { CATEGORIES, CONDITIONS, SEASONS, hasSeason, setCaption, type Category, type Condition } from "@/lib/sets";
 import type { CardRow } from "@/lib/store";
 import type { PriceQuote } from "@/lib/pricing";
 
@@ -137,10 +138,6 @@ export function CreateListingForm({
 }
 
 const selectClass = `${field} w-full border border-[#d5e3f0] px-3`;
-const chipClass = (active: boolean) =>
-  `rounded-full px-3 py-1.5 text-sm font-semibold ring-1 ${
-    active ? "bg-[#24344a] text-white ring-[#24344a]" : "bg-white text-[#3e5870] ring-[#d5e3f0]"
-  }`;
 
 export function ManualListingForm() {
   const [state, action] = useActionState(createManualListingAction, null);
@@ -148,12 +145,13 @@ export function ManualListingForm() {
   const [setId, setSetId] = useState(SEASONS[0]?.key ?? "");
   const [preview, setPreview] = useState<string | null>(null);
   const isCard = category === "card";
+  const seasonal = hasSeason(category);
 
   return (
     <section className="rounded-3xl bg-white p-4 ring-1 ring-[#d5e3f0] sm:p-5">
       <h2 className="font-extrabold">Đăng tay</h2>
       <p className="mt-1 text-sm text-[#5d7388]">
-        Nhập thẻ, booster box, box seal, box unseal hoặc pack lẻ. Chọn mùa trong danh sách và tải ảnh lên.
+        Nhập thẻ, hộp, pack, binder, sleeves hoặc top loader. Phụ kiện không cần chọn mùa.
       </p>
       <form action={action} className="mt-3 grid gap-3">
         <div className="grid gap-3 sm:grid-cols-2">
@@ -173,22 +171,15 @@ export function ManualListingForm() {
               ))}
             </select>
           </div>
-          <div className="grid gap-2 sm:col-span-2">
-            <Label>Mùa</Label>
-            <input type="hidden" name="setId" value={setId} />
-            {ERAS.map((era) => (
-              <div key={era.id}>
-                <p className="mb-2 text-xs font-semibold text-[#5d7388]">{era.label}</p>
-                <div className="flex flex-wrap gap-2">
-                  {SEASONS.filter((item) => item.era === era.id).map((item) => (
-                    <button key={item.key} type="button" className={chipClass(setId === item.key)} onClick={() => setSetId(item.key)}>
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
+          {seasonal ? (
+            <div className="grid gap-1.5 sm:col-span-2">
+              <Label>Mùa</Label>
+              <input type="hidden" name="setId" value={setId} />
+              <SeasonNav seasons={SEASONS} value={setId} onChange={setSetId} />
+            </div>
+          ) : (
+            <input type="hidden" name="setId" value="" />
+          )}
         </div>
         <div className={`grid gap-3 ${isCard ? "sm:grid-cols-2" : ""}`}>
           <div className="grid gap-1.5">

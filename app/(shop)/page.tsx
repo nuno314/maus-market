@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { HomeCarousel } from "@/components/home-carousel";
 import { ShopBrowser } from "@/components/shop-browser";
 import { listShopListings } from "@/lib/store";
 
@@ -8,6 +9,7 @@ export default async function HomePage() {
   const listings = await listShopListings();
   return (
     <div>
+      <HomeCarousel />
       <section className="overflow-hidden rounded-[2rem] bg-white px-5 py-6 ring-1 ring-[#d5e3f0] sm:px-8">
         <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:text-left">
           <Image src="/logo.png" alt="" width={256} height={256} priority className="size-28 rounded-full bg-white sm:size-32" />

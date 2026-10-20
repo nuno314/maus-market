@@ -17,7 +17,7 @@ export function ProductMeta({
 }) {
   return (
     <>
-      <p className={captionClassName}>{listingCaption(item)}</p>
+      {listingCaption(item) ? <p className={captionClassName}>{listingCaption(item)}</p> : null}
       <div className="mt-1">
         {item.category === "card" ? <ConditionBadge condition={item.condition} /> : <CategoryBadge category={item.category} />}
       </div>

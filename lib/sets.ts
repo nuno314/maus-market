@@ -1,6 +1,6 @@
 export type Language = "en" | "ja";
 export type Condition = "A" | "A-" | "B";
-export type Category = "card" | "booster-box" | "box-seal" | "box-unseal" | "pack";
+export type Category = "card" | "booster-box" | "box-seal" | "box-unseal" | "pack" | "binder" | "sleeves" | "top-loader";
 export type Era = "sv" | "me";
 
 export const CATEGORIES: { id: Category; label: string }[] = [
@@ -9,7 +9,14 @@ export const CATEGORIES: { id: Category; label: string }[] = [
   { id: "box-seal", label: "Box seal" },
   { id: "box-unseal", label: "Box unseal" },
   { id: "pack", label: "Pack lẻ" },
+  { id: "binder", label: "Binder" },
+  { id: "sleeves", label: "Sleeves" },
+  { id: "top-loader", label: "Top loader" },
 ];
+
+export function hasSeason(category: string): boolean {
+  return category !== "binder" && category !== "sleeves" && category !== "top-loader";
+}
 
 export type SetDef = {
   tcgdexId: string | null;
@@ -345,6 +352,7 @@ export function listingCaption(item: {
   number: string;
   category: Category;
 }): string {
+  if (!hasSeason(item.category)) return "";
   const season = setCaption(item);
   if (item.category === "card" && item.number.trim()) return `${season} · #${item.number}`;
   return season;

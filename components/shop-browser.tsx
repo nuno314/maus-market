@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatVnd } from "@/lib/money";
 import { ProductMeta } from "@/components/product-meta";
-import { CATEGORIES, ERAS, SEASONS, languageLabel, type Category, type Language } from "@/lib/sets";
+import { SeasonNav } from "@/components/season-nav";
+import { CATEGORIES, SEASONS, hasSeason, languageLabel, type Category, type Language } from "@/lib/sets";
 import type { ShopListing } from "@/lib/store";
 
 export function ShopBrowser({ listings }: { listings: ShopListing[] }) {
@@ -20,7 +21,7 @@ export function ShopBrowser({ listings }: { listings: ShopListing[] }) {
 
   const needle = query.trim().toLowerCase();
   const visible = listings.filter((item) => {
-    if (language !== "all" && item.language !== language) return false;
+    if (language !== "all" && hasSeason(item.category) && item.language !== language) return false;
     if (season !== "all" && item.seasonKey !== season) return false;
     if (category !== "all" && item.category !== category) return false;
     if (!needle) return true;
@@ -70,41 +71,8 @@ export function ShopBrowser({ listings }: { listings: ShopListing[] }) {
         </div>
       </div>
 
-      <div className="mt-3 grid gap-3" role="group" aria-label="Lọc theo mùa">
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setSeason("all")}
-            className={`rounded-full px-3 py-1.5 text-sm font-semibold ring-1 ${
-              season === "all" ? "bg-[#d7ebf8] text-[#1a4f86] ring-[#9ec7e8]" : "bg-white text-[#3e5870] ring-[#d5e3f0]"
-            }`}
-          >
-            Mọi mùa
-          </button>
-        </div>
-        {ERAS.map((era) => {
-          const items = seasons.filter((item) => item.era === era.id);
-          if (items.length === 0) return null;
-          return (
-            <div key={era.id}>
-              <p className="mb-2 text-xs font-semibold text-[#5d7388]">{era.label}</p>
-              <div className="flex flex-wrap gap-2">
-                {items.map((item) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() => setSeason(item.key)}
-                    className={`rounded-full px-3 py-1.5 text-sm font-semibold ring-1 ${
-                      season === item.key ? "bg-[#d7ebf8] text-[#1a4f86] ring-[#9ec7e8]" : "bg-white text-[#3e5870] ring-[#d5e3f0]"
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          );
-        })}
+      <div className="mt-3">
+        <SeasonNav seasons={seasons} value={season} onChange={setSeason} allowAll />
       </div>
       <label className="mt-3 grid max-w-xs gap-1 text-xs font-semibold text-[#5d7388]">
         Loại
@@ -148,7 +116,7 @@ export function ShopBrowser({ listings }: { listings: ShopListing[] }) {
                   <p className="line-clamp-2 text-sm font-bold leading-snug">{listing.name}</p>
                   {listing.description ? <p className="line-clamp-2 text-xs text-[#5d7388]">{listing.description}</p> : null}
                   <ProductMeta item={listing} captionClassName="text-xs text-[#5d7388]" />
-                  <p className="text-xs text-[#5d7388]">{languageLabel(listing.language)}</p>
+                  {hasSeason(listing.category) ? <p className="text-xs text-[#5d7388]">{languageLabel(listing.language)}</p> : null}
                   <div className="mt-1 flex items-center justify-end gap-2">
                     <span className="text-xs text-[#5d7388]">Còn {listing.quantity}</span>
                   </div>

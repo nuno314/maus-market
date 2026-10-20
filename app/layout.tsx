@@ -19,7 +19,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="vi" className={`${nunito.variable} h-full antialiased`}>
-      <body className="flex min-h-full flex-col bg-[#f3f7fb] font-sans text-[#1b2a3b]">{children}</body>
+      <body className="flex min-h-full flex-col overflow-x-hidden bg-[#f3f7fb] font-sans text-[#1b2a3b]">{children}</body>
     </html>
   );
 }

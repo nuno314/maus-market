@@ -7,7 +7,7 @@ import { syncCatalog } from "@/lib/catalog";
 import { fetchFxRates } from "@/lib/fx";
 import { priceFromManualSource, quoteCard } from "@/lib/pricing";
 import { SESSION_COOKIE, credentialsMatch, readSession, signSession } from "@/lib/session";
-import { findSet, type Condition } from "@/lib/sets";
+import { findSet, hasSeason, type Condition } from "@/lib/sets";
 import { saveUploadedImage } from "@/lib/uploads";
 import {
   deleteListing,
@@ -130,8 +130,9 @@ export async function createManualListingAction(
   } else {
     imageUrl = parseHttpUrl(String(formData.get("imageUrl") ?? ""));
   }
-  if (!set || !category || !condition || quantity === null || quantity < 1) {
-    return { error: "Điền đủ mùa, loại sản phẩm và số lượng." };
+  const seasonal = category ? hasSeason(category) : true;
+  if (!category || !condition || quantity === null || quantity < 1 || (seasonal && !set)) {
+    return { error: seasonal ? "Điền đủ mùa, loại sản phẩm và số lượng." : "Điền đủ loại sản phẩm và số lượng." };
   }
   if (!isValidName(name) || (category === "card" && (!number || number.length > 12))) {
     return { error: category === "card" ? "Tên lá và số thẻ chưa hợp lệ." : "Tên sản phẩm chưa hợp lệ." };
@@ -142,11 +143,11 @@ export async function createManualListingAction(
   }
   if (!priceVnd) return { error: "Giá bán VND cần từ 1.000 đến 100.000.000." };
   const card = await insertManualCard({
-    language: set.language,
-    setId: set.tcgdexId ?? set.seasonKey,
-    setName: set.name,
-    setCode: set.code,
-    seasonKey: set.seasonKey,
+    language: set?.language ?? "en",
+    setId: set ? (set.tcgdexId ?? set.seasonKey) : "",
+    setName: set?.name ?? "",
+    setCode: set?.code ?? "",
+    seasonKey: set?.seasonKey ?? "",
     number,
     name,
     imageUrl,
