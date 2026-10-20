@@ -19,19 +19,37 @@ function extensionFor(file: File): string | null {
   return match[1] === "jpeg" ? "jpg" : match[1]!;
 }
 
+export class UploadError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "UploadError";
+  }
+}
+
 export async function saveUploadedImage(file: File): Promise<string | null> {
   const ext = extensionFor(file);
   if (!ext || file.size <= 0 || file.size > MAX_BYTES) return null;
   const name = `${Date.now()}-${randomBytes(4).toString("hex")}.${ext}`;
-  if (process.env.BLOB_READ_WRITE_TOKEN) {
-    const blob = await put(`uploads/${name}`, file, {
-      access: "public",
-      token: process.env.BLOB_READ_WRITE_TOKEN,
-    });
-    return blob.url;
+  const token = process.env.BLOB_READ_WRITE_TOKEN;
+  if (token) {
+    try {
+      const blob = await put(`uploads/${name}`, file, { access: "public", token });
+      return blob.url;
+    } catch {
+      throw new UploadError("Không lưu được ảnh lên Blob. Kiểm tra store đã gắn vào project rồi thử lại.");
+    }
+  }
+  if (process.env.VERCEL) {
+    throw new UploadError(
+      "Vercel không lưu được file ảnh. Vào Storage, tạo Blob store, gắn vào project rồi deploy lại.",
+    );
   }
   const dir = path.join(process.cwd(), "public", "uploads");
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, name), Buffer.from(await file.arrayBuffer()));
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, name), Buffer.from(await file.arrayBuffer()));
+  } catch {
+    throw new UploadError("Không lưu được ảnh trên máy chủ.");
+  }
   return `/uploads/${name}`;
 }

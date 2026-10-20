@@ -8,7 +8,7 @@ import { fetchFxRates } from "@/lib/fx";
 import { priceFromManualSource, quoteCard } from "@/lib/pricing";
 import { SESSION_COOKIE, credentialsMatch, readSession, signSession } from "@/lib/session";
 import { findSet, hasSeason, type Condition } from "@/lib/sets";
-import { saveUploadedImage } from "@/lib/uploads";
+import { UploadError, saveUploadedImage } from "@/lib/uploads";
 import {
   deleteListing,
   getCard,
@@ -125,7 +125,12 @@ export async function createManualListingAction(
   const uploaded = formData.get("image");
   let imageUrl: string | null = null;
   if (uploaded instanceof File && uploaded.size > 0) {
-    imageUrl = await saveUploadedImage(uploaded);
+    try {
+      imageUrl = await saveUploadedImage(uploaded);
+    } catch (error) {
+      if (error instanceof UploadError) return { error: error.message };
+      throw error;
+    }
     if (!imageUrl) return { error: "Ảnh cần là JPG, PNG, WEBP hoặc GIF, tối đa 5 MB." };
   } else {
     imageUrl = parseHttpUrl(String(formData.get("imageUrl") ?? ""));
