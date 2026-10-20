@@ -8,7 +8,6 @@ import { fetchFxRates } from "@/lib/fx";
 import { priceFromManualSource, quoteCard } from "@/lib/pricing";
 import { SESSION_COOKIE, credentialsMatch, readSession, signSession } from "@/lib/session";
 import { findSet, hasSeason, type Condition } from "@/lib/sets";
-import { UploadError, saveUploadedImage } from "@/lib/uploads";
 import {
   deleteListing,
   getCard,
@@ -19,15 +18,16 @@ import {
   saveListing,
   saveSettings,
   setOrderStatus,
+  updateListedProduct,
   updateListingPrice,
   updateListingQuantity,
   type OrderStatus,
 } from "@/lib/store";
 import {
+  collectImages,
   isValidName,
   parseCategory,
   parseCondition,
-  parseHttpUrl,
   parseMoney,
   parseQuantity,
   parseVnd,
@@ -122,19 +122,8 @@ export async function createManualListingAction(
   const description = String(formData.get("description") ?? "").trim();
   const priceVnd = parseVnd(formData.get("priceVnd"));
   const number = category === "card" ? String(formData.get("number") ?? "").trim() : "";
-  const uploaded = formData.get("image");
-  let imageUrl: string | null = null;
-  if (uploaded instanceof File && uploaded.size > 0) {
-    try {
-      imageUrl = await saveUploadedImage(uploaded);
-    } catch (error) {
-      if (error instanceof UploadError) return { error: error.message };
-      throw error;
-    }
-    if (!imageUrl) return { error: "Ảnh cần là JPG, PNG, WEBP hoặc GIF, tối đa 5 MB." };
-  } else {
-    imageUrl = parseHttpUrl(String(formData.get("imageUrl") ?? ""));
-  }
+  const images = collectImages(formData);
+  if ("error" in images) return images;
   const seasonal = category ? hasSeason(category) : true;
   if (!category || !condition || quantity === null || quantity < 1 || (seasonal && !set)) {
     return { error: seasonal ? "Điền đủ mùa, loại sản phẩm và số lượng." : "Điền đủ loại sản phẩm và số lượng." };
@@ -143,9 +132,6 @@ export async function createManualListingAction(
     return { error: category === "card" ? "Tên lá và số thẻ chưa hợp lệ." : "Tên sản phẩm chưa hợp lệ." };
   }
   if (description.length > 400) return { error: "Mô tả tối đa 400 ký tự." };
-  if (!imageUrl) {
-    return { error: "Chọn file ảnh hoặc dán link ảnh http/https." };
-  }
   if (!priceVnd) return { error: "Giá bán VND cần từ 1.000 đến 100.000.000." };
   const card = await insertManualCard({
     language: set?.language ?? "en",
@@ -155,7 +141,8 @@ export async function createManualListingAction(
     seasonKey: set?.seasonKey ?? "",
     number,
     name,
-    imageUrl,
+    imageUrl: images.images[0]!,
+    images: images.images,
     category,
     description,
   });
@@ -179,6 +166,59 @@ export async function createManualListingAction(
   }
   refreshShop();
   redirect("/admin?listed=1");
+}
+
+export async function updateListingAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  await requireAdmin();
+  const id = Number(formData.get("id"));
+  const listing = Number.isInteger(id) ? await getListing(id) : null;
+  const card = listing ? await getCard(listing.cardId) : null;
+  if (!listing || !card) return { error: "Không tìm thấy sản phẩm." };
+  const manual = card.manual === 1;
+  const category = manual ? parseCategory(formData.get("category")) : card.category;
+  const seasonal = category ? hasSeason(category) : true;
+  const set = manual && seasonal ? findSet(String(formData.get("setId") ?? "")) : null;
+  const condition = category && category !== "card" ? "A" : parseCondition(formData.get("condition"));
+  const quantity = parseQuantity(formData.get("quantity"));
+  const name = manual ? String(formData.get("name") ?? "").trim() : card.name;
+  const description = String(formData.get("description") ?? "").trim();
+  const number = category === "card" ? (manual ? String(formData.get("number") ?? "").trim() : card.number) : "";
+  const images = collectImages(formData);
+  if ("error" in images) return images;
+  const canEditPrice = manual || listing.sourceCurrency === "VND";
+  const priceVnd = canEditPrice ? parseVnd(formData.get("priceVnd")) : null;
+  if (!category || !condition || quantity === null || (manual && seasonal && !set)) {
+    return { error: seasonal ? "Điền đủ mùa, loại sản phẩm và số lượng." : "Điền đủ loại sản phẩm và số lượng." };
+  }
+  if (manual && (!isValidName(name) || (category === "card" && (!number || number.length > 12)))) {
+    return { error: category === "card" ? "Tên lá và số thẻ chưa hợp lệ." : "Tên sản phẩm chưa hợp lệ." };
+  }
+  if (description.length > 400) return { error: "Mô tả tối đa 400 ký tự." };
+  if (canEditPrice && !priceVnd) return { error: "Giá bán VND cần từ 1.000 đến 100.000.000." };
+  const saved = await updateListedProduct({
+    listingId: listing.id,
+    manual,
+    name,
+    description,
+    category,
+    language: manual ? (set?.language ?? card.language) : card.language,
+    setId: manual ? (set ? (set.tcgdexId ?? set.seasonKey) : "") : card.setId,
+    setName: manual ? (set?.name ?? "") : card.setName,
+    setCode: manual ? (set?.code ?? "") : card.setCode,
+    seasonKey: manual ? (set?.seasonKey ?? "") : card.seasonKey,
+    number,
+    condition,
+    quantity,
+    priceVnd,
+    images: images.images,
+  });
+  if (saved === "duplicate") return { error: "Đã có sản phẩm cùng lá và condition này." };
+  if (saved !== "ok") return { error: "Không lưu được sản phẩm." };
+  refreshShop();
+  redirect("/admin?edited=1");
 }
 
 async function resolvePrice(

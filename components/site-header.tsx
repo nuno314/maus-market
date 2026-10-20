@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ShoppingBag } from "lucide-react";
 import { useCart } from "@/components/cart-provider";
 
-export function SiteHeader() {
+export function SiteHeader({ username }: { username: string | null }) {
   const cart = useCart();
   return (
     <header className="sticky top-0 z-40 border-b border-[#d5e3f0] bg-white/90 backdrop-blur">
@@ -29,6 +29,9 @@ export function SiteHeader() {
             <span className="grid min-w-5 place-items-center rounded-full bg-white px-1 text-xs text-[#24344a]">
               {cart.count}
             </span>
+          </Link>
+          <Link href={username ? "/account" : "/account/login"} className="px-2 text-sm font-semibold text-[#3e5870] hover:text-[#1c2b3a]">
+            {username ?? "Đăng nhập"}
           </Link>
           <Link href="/admin" className="px-2 text-sm font-semibold text-[#3e5870] hover:text-[#1c2b3a]">
             Admin

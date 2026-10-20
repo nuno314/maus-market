@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { currentUser } from "@/lib/current-user";
 import { placeOrder } from "@/lib/store";
 import { cleanPhone, isValidName, isValidPhone } from "@/lib/validate";
 
@@ -48,16 +49,19 @@ export async function placeOrderAction(formData: FormData): Promise<CheckoutResu
   }
 
   try {
+    const user = await currentUser();
     const order = await placeOrder({
       lines,
       zaloPhone,
       zaloName,
       shippingMethod,
       shippingAddress: shippingMethod === "manual" ? shippingAddress : null,
+      userId: user?.id ?? null,
     });
     revalidatePath("/");
     revalidatePath("/admin");
     revalidatePath("/admin/orders");
+    revalidatePath("/account");
     return { ok: true, code: order.code };
   } catch (error) {
     return {

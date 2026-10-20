@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import { Search } from "lucide-react";
-import { CardThumb } from "@/components/card-thumb";
 import { useCart } from "@/components/cart-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatVnd } from "@/lib/money";
+import { ProductGallery } from "@/components/product-gallery";
 import { ProductMeta } from "@/components/product-meta";
 import { SeasonNav } from "@/components/season-nav";
 import { CATEGORIES, SEASONS, hasSeason, languageLabel, type Category, type Language } from "@/lib/sets";
@@ -107,8 +107,8 @@ export function ShopBrowser({ listings }: { listings: ShopListing[] }) {
           <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {visible.map((listing) => (
               <li key={listing.id} className="flex flex-col rounded-2xl bg-white p-2.5 shadow-sm ring-1 ring-[#d5e3f0]">
-                <CardThumb
-                  src={listing.imageUrl}
+                <ProductGallery
+                  images={listing.images.length ? listing.images : [listing.imageUrl]}
                   alt={listing.name}
                   className={listing.category === "card" ? "aspect-[63/88] w-full rounded-xl" : "aspect-square w-full rounded-xl"}
                 />

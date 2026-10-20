@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { formatSource, formatVnd, type PriceSettings } from "@/lib/money";
+import { ImageField } from "@/components/image-field";
 import { SeasonNav } from "@/components/season-nav";
 import { CATEGORIES, CONDITIONS, SEASONS, hasSeason, setCaption, type Category, type Condition } from "@/lib/sets";
 import type { CardRow } from "@/lib/store";
@@ -143,7 +144,7 @@ export function ManualListingForm() {
   const [state, action] = useActionState(createManualListingAction, null);
   const [category, setCategory] = useState<Category>("card");
   const [setId, setSetId] = useState(SEASONS[0]?.key ?? "");
-  const [preview, setPreview] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const isCard = category === "card";
   const seasonal = hasSeason(category);
 
@@ -151,7 +152,7 @@ export function ManualListingForm() {
     <section className="rounded-3xl bg-white p-4 ring-1 ring-[#d5e3f0] sm:p-5">
       <h2 className="font-extrabold">Đăng tay</h2>
       <p className="mt-1 text-sm text-[#5d7388]">
-        Nhập thẻ, hộp, pack, binder, sleeves hoặc top loader. Phụ kiện không cần chọn mùa.
+        Nhập thẻ, hộp, pack, binder, sleeves hoặc top loader. Phụ kiện không cần chọn mùa. Có thể thêm nhiều ảnh.
       </p>
       <form action={action} className="mt-3 grid gap-3">
         <div className="grid gap-3 sm:grid-cols-2">
@@ -199,30 +200,7 @@ export function ManualListingForm() {
           <Label htmlFor="description">Mô tả</Label>
           <Textarea id="description" name="description" maxLength={400} rows={3} className="rounded-xl bg-white" placeholder="Tình trạng hộp, seal, nội dung đi kèm..." />
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="grid gap-1.5">
-            <Label htmlFor="image">Ảnh</Label>
-            <Input
-              id="image"
-              name="image"
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/gif"
-              className={field}
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                setPreview((current) => {
-                  if (current) URL.revokeObjectURL(current);
-                  return file ? URL.createObjectURL(file) : null;
-                });
-              }}
-            />
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="imageUrl">Hoặc link ảnh</Label>
-            <Input id="imageUrl" name="imageUrl" type="url" className={field} placeholder="https://" />
-          </div>
-        </div>
-        {preview ? <CardThumb src={preview} alt="" className="h-36 w-28 rounded-xl" /> : null}
+        <ImageField initial={[]} onBusyChange={setUploading} />
         <div className={`grid gap-3 ${isCard ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
           {isCard ? (
             <div className="grid gap-1.5">
@@ -248,7 +226,9 @@ export function ManualListingForm() {
           </div>
         </div>
         {state?.error ? <p className="text-sm font-semibold text-[#8a3b3b]">{state.error}</p> : null}
-        <SubmitButton className="h-11 rounded-full">Đăng lên shop</SubmitButton>
+        <SubmitButton className="h-11 rounded-full" disabled={uploading}>
+          Đăng lên shop
+        </SubmitButton>
       </form>
     </section>
   );

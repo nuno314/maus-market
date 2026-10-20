@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS cards (
   number TEXT NOT NULL,
   name TEXT NOT NULL,
   image_url TEXT NOT NULL,
+  images TEXT NOT NULL DEFAULT '',
   manual INTEGER NOT NULL DEFAULT 0,
   category TEXT NOT NULL DEFAULT 'card',
   description TEXT NOT NULL DEFAULT ''
@@ -58,6 +59,14 @@ CREATE TABLE IF NOT EXISTS orders (
   shipping_method TEXT NOT NULL,
   shipping_address TEXT,
   status TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  user_id INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  username TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
 
@@ -81,7 +90,7 @@ CREATE TABLE IF NOT EXISTS order_items (
 
 type Db = ReturnType<typeof drizzle<typeof schema>>;
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 5;
 
 const globalForDb = globalThis as unknown as {
   mausClient?: Promise<Client>;
@@ -131,6 +140,13 @@ async function openDatabase() {
   }
   if (!items.includes("description")) {
     await client.execute(`ALTER TABLE order_items ADD COLUMN description TEXT NOT NULL DEFAULT ''`);
+  }
+  if (!cards.includes("images")) {
+    await client.execute(`ALTER TABLE cards ADD COLUMN images TEXT NOT NULL DEFAULT ''`);
+  }
+  const orderColumns = await columnNames(client, "orders");
+  if (!orderColumns.includes("user_id")) {
+    await client.execute(`ALTER TABLE orders ADD COLUMN user_id INTEGER`);
   }
   const settings = await client.execute("SELECT id FROM settings WHERE id = 1");
   if (settings.rows.length === 0) {

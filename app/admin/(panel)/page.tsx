@@ -7,6 +7,7 @@ import {
   updateQuantityAction,
 } from "@/app/actions/admin";
 import { CreateListingForm, ManualListingForm } from "@/components/admin-forms";
+import { EditListingForm } from "@/components/edit-listing-form";
 import { CardThumb } from "@/components/card-thumb";
 import { ProductMeta } from "@/components/product-meta";
 import { SubmitButton } from "@/components/submit-button";
@@ -118,7 +119,14 @@ export default async function AdminHomePage({
           <ul className="grid gap-3">
             {stock.map((listing) => (
               <li key={listing.id} className="flex flex-col gap-3 rounded-2xl bg-white p-3 ring-1 ring-[#d5e3f0] sm:flex-row">
-                <CardThumb src={listing.imageUrl} alt={listing.name} className="h-28 w-20 rounded-lg" />
+                <div className="relative w-fit">
+                  <CardThumb src={listing.imageUrl} alt={listing.name} className="h-28 w-20 rounded-lg" />
+                  {listing.images.length > 1 ? (
+                    <span className="absolute bottom-1 right-1 rounded-full bg-[#24344a] px-1.5 py-0.5 text-[10px] font-bold text-white">
+                      {listing.images.length}
+                    </span>
+                  ) : null}
+                </div>
                 <div className="min-w-0 flex-1">
                   <p className="font-extrabold">{listing.name}</p>
                   {listing.description ? <p className="line-clamp-2 text-sm text-[#5d7388]">{listing.description}</p> : null}
@@ -160,6 +168,7 @@ export default async function AdminHomePage({
                       </SubmitButton>
                     </form>
                   </div>
+                  <EditListingForm listing={listing} />
                 </div>
               </li>
             ))}
@@ -174,14 +183,16 @@ function Notice({ query }: { query: Record<string, string | string[] | undefined
   const synced = one(query.synced);
   const skip = one(query.skip);
   const listed = one(query.listed);
+  const edited = one(query.edited);
   const priced = one(query.priced);
   const priceFailed = one(query.priceFailed);
   const priceError = one(query.priceError);
-  if (!synced && !listed && !priced && !priceError) return null;
+  if (!synced && !listed && !edited && !priced && !priceError) return null;
   return (
     <div className="rounded-2xl bg-[#eef7f1] px-4 py-3 text-sm text-[#24573a]">
       {synced ? <p>Đã lưu {synced} lá từ catalog.{skip ? ` Chưa đồng bộ: ${skip}.` : ""}</p> : null}
       {listed ? <p>Đã đăng sản phẩm lên shop.</p> : null}
+      {edited ? <p>Đã lưu thay đổi sản phẩm.</p> : null}
       {priced ? (
         <p>
           Đã cập nhật giá{priceFailed ? `, ${priceFailed} lá giữ giá cũ vì không lấy được nguồn` : ""}.

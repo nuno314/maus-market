@@ -5,6 +5,7 @@ import { getClient, getDb } from "@/lib/db";
 import { cards, listings, orderItems, orders, settings } from "@/lib/schema";
 import type { PriceSettings } from "@/lib/money";
 import type { Category, Condition, Language } from "@/lib/sets";
+import { parseStoredImages } from "@/lib/images";
 import { asCategory, conditionRank, seasonRank } from "@/lib/sets";
 
 export type CardRow = {
@@ -17,6 +18,7 @@ export type CardRow = {
   number: string;
   name: string;
   imageUrl: string;
+  images: string[];
   manual: number;
   category: Category;
   description: string;
@@ -36,6 +38,8 @@ export type ShopListing = {
   quantity: number;
   priceVnd: number;
   imageUrl: string;
+  images: string[];
+  manual: number;
   description: string;
   sourceLabel: string | null;
   sourcePrice: number | null;
@@ -129,7 +133,7 @@ export async function countCards() {
   return row?.count ?? 0;
 }
 
-export async function upsertCatalogCard(card: Omit<CardRow, "manual" | "category" | "description">) {
+export async function upsertCatalogCard(card: Omit<CardRow, "manual" | "category" | "description" | "images">) {
   const client = await getClient();
   await client.execute({
     sql: `INSERT INTO cards (id, language, set_id, set_name, set_code, season_key, number, name, image_url, manual)
@@ -196,6 +200,7 @@ function mapCard(row: typeof cards.$inferSelect): CardRow {
     number: row.number,
     name: row.name,
     imageUrl: row.imageUrl,
+    images: parseStoredImages(row.images, row.imageUrl),
     manual: row.manual,
     category: asCategory(row.category),
     description: row.description ?? "",
@@ -211,6 +216,7 @@ export async function insertManualCard(input: {
   number: string;
   name: string;
   imageUrl: string;
+  images?: string[];
   category: Category;
   description: string;
 }): Promise<CardRow> {
@@ -226,7 +232,8 @@ export async function insertManualCard(input: {
       seasonKey: input.seasonKey,
       number: input.number,
       name: input.name.trim(),
-      imageUrl: input.imageUrl.trim(),
+      imageUrl: (input.images?.[0] ?? input.imageUrl).trim(),
+      images: JSON.stringify((input.images?.length ? input.images : [input.imageUrl]).map((url) => url.trim())),
       manual: 1,
       category: input.category,
       description: input.description.trim(),
@@ -249,6 +256,8 @@ const listingSelect = {
   quantity: listings.quantity,
   priceVnd: listings.priceVnd,
   imageUrl: cards.imageUrl,
+  images: cards.images,
+  manual: cards.manual,
   description: cards.description,
   sourceLabel: listings.sourceLabel,
   sourcePrice: listings.sourcePrice,
@@ -270,14 +279,20 @@ function mapListing(row: {
   quantity: number;
   priceVnd: number;
   imageUrl: string;
+  images: string;
+  manual: number;
   description: string;
   sourceLabel: string | null;
   sourcePrice: number | null;
   sourceCurrency: string;
   sourceUrl: string | null;
 }): ShopListing {
+  const images = parseStoredImages(row.images, row.imageUrl);
   return {
     ...row,
+    imageUrl: images[0] || row.imageUrl,
+    images,
+    manual: row.manual,
     language: asLanguage(row.language),
     category: asCategory(row.category),
     condition: asCondition(row.condition),
@@ -375,6 +390,84 @@ export async function saveListing(input: {
   return Number(result.lastInsertRowid);
 }
 
+export async function updateListedProduct(input: {
+  listingId: number;
+  manual: boolean;
+  name: string;
+  description: string;
+  category: Category;
+  language: Language;
+  setId: string;
+  setName: string;
+  setCode: string;
+  seasonKey: string;
+  number: string;
+  condition: Condition;
+  quantity: number;
+  priceVnd: number | null;
+  images: string[];
+}): Promise<"ok" | "missing" | "duplicate"> {
+  const listing = await getListing(input.listingId);
+  if (!listing) return "missing";
+  const client = await getClient();
+  if (input.condition !== listing.condition) {
+    const clash = await client.execute({
+      sql: `SELECT id FROM listings WHERE card_id = ? AND condition = ? AND id != ?`,
+      args: [listing.cardId, input.condition, input.listingId],
+    });
+    if (clash.rows[0]) return "duplicate";
+  }
+  const db = await getDb();
+  const now = new Date().toISOString();
+  if (input.manual) {
+    await db
+      .update(cards)
+      .set({
+        name: input.name,
+        description: input.description,
+        category: input.category,
+        language: input.language,
+        setId: input.setId,
+        setName: input.setName,
+        setCode: input.setCode,
+        seasonKey: input.seasonKey,
+        number: input.number,
+        imageUrl: input.images[0] ?? "",
+        images: JSON.stringify(input.images),
+      })
+      .where(eq(cards.id, listing.cardId))
+      .run();
+  } else {
+    await db
+      .update(cards)
+      .set({
+        description: input.description,
+        images: JSON.stringify(input.images),
+      })
+      .where(eq(cards.id, listing.cardId))
+      .run();
+  }
+  await db
+    .update(listings)
+    .set({
+      condition: input.condition,
+      quantity: input.quantity,
+      updatedAt: now,
+      ...(input.priceVnd !== null
+        ? {
+            priceVnd: input.priceVnd,
+            sourcePrice: input.priceVnd,
+            sourceCurrency: "VND",
+            sourceLabel: "Giá nhập tay",
+            conditionPriced: 1,
+          }
+        : {}),
+    })
+    .where(eq(listings.id, input.listingId))
+    .run();
+  return "ok";
+}
+
 export async function updateListingQuantity(id: number, quantity: number) {
   const db = await getDb();
   await db.update(listings)
@@ -422,6 +515,34 @@ export async function countNewOrders() {
     .where(eq(orders.status, "new"))
     .get();
   return row?.count ?? 0;
+}
+
+export async function listUserOrders(userId: number): Promise<OrderRow[]> {
+  const client = await getClient();
+  const result = await client.execute({
+    sql: `SELECT o.id, o.code, o.zalo_phone as zaloPhone, o.zalo_name as zaloName,
+            o.shipping_method as shippingMethod, o.shipping_address as shippingAddress,
+            o.status, o.created_at as createdAt,
+            COUNT(i.id) as itemCount,
+            COALESCE(SUM(i.quantity * i.unit_price_vnd), 0) as totalVnd
+     FROM orders o
+     LEFT JOIN order_items i ON i.order_id = o.id
+     WHERE o.user_id = ?
+     GROUP BY o.id
+     ORDER BY o.id DESC`,
+    args: [userId],
+  });
+  return result.rows.map((row) => {
+    const item = row as unknown as OrderRow;
+    return {
+      ...item,
+      id: Number(item.id),
+      shippingMethod: item.shippingMethod === "manual" ? "manual" : "later",
+      status: item.status as OrderStatus,
+      itemCount: Number(item.itemCount),
+      totalVnd: Number(item.totalVnd),
+    };
+  });
 }
 
 export async function listOrders(): Promise<OrderRow[]> {
@@ -541,6 +662,7 @@ export async function placeOrder(input: {
   zaloName: string;
   shippingMethod: "manual" | "later";
   shippingAddress: string | null;
+  userId: number | null;
 }): Promise<{ code: string }> {
   const client = await getClient();
   const code = await makeOrderCode(client);
@@ -566,6 +688,7 @@ async function writeOrder(
     zaloName: string;
     shippingMethod: "manual" | "later";
     shippingAddress: string | null;
+    userId: number | null;
   },
   code: string,
   now: string,
@@ -642,9 +765,9 @@ async function writeOrder(
   }
 
   const order = await sqlite.execute({
-    sql: `INSERT INTO orders (code, zalo_phone, zalo_name, shipping_method, shipping_address, status, created_at)
-         VALUES (?, ?, ?, ?, ?, 'new', ?)`,
-    args: [code, input.zaloPhone, input.zaloName, input.shippingMethod, input.shippingAddress, now],
+    sql: `INSERT INTO orders (code, zalo_phone, zalo_name, shipping_method, shipping_address, status, created_at, user_id)
+         VALUES (?, ?, ?, ?, ?, 'new', ?, ?)`,
+    args: [code, input.zaloPhone, input.zaloName, input.shippingMethod, input.shippingAddress, now, input.userId],
   });
   const orderId = Number(order.lastInsertRowid);
   for (const item of snapshots) {

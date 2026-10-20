@@ -21,6 +21,7 @@ export const cards = sqliteTable("cards", {
   number: text("number").notNull(),
   name: text("name").notNull(),
   imageUrl: text("image_url").notNull(),
+  images: text("images").notNull().default(""),
   manual: integer("manual").notNull().default(0),
   category: text("category").notNull().default("card"),
   description: text("description").notNull().default(""),
@@ -49,6 +50,14 @@ export const orders = sqliteTable("orders", {
   shippingMethod: text("shipping_method").notNull(),
   shippingAddress: text("shipping_address"),
   status: text("status").notNull(),
+  createdAt: text("created_at").notNull(),
+  userId: integer("user_id"),
+});
+
+export const users = sqliteTable("users", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  username: text("username").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
   createdAt: text("created_at").notNull(),
 });
 
