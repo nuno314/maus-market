@@ -181,15 +181,23 @@ export async function createBulkCardsAction(
   const images = formData.getAll("image").map((value) => String(value));
   const setIds = formData.getAll("setId").map((value) => String(value));
   const conditions = formData.getAll("condition");
+  const quantities = formData.getAll("quantity");
   const count = names.length;
   if (count === 0) return { error: "Chọn ảnh các thẻ cần đăng." };
   if (count > MAX_BULK_CARDS) return { error: `Mỗi lần đăng tối đa ${MAX_BULK_CARDS} thẻ.` };
-  if (prices.length !== count || images.length !== count || setIds.length !== count || conditions.length !== count) {
+  if (
+    prices.length !== count ||
+    images.length !== count ||
+    setIds.length !== count ||
+    conditions.length !== count ||
+    quantities.length !== count
+  ) {
     return { error: "Danh sách thẻ không khớp. Tải lại trang rồi thử lại." };
   }
   const rows: {
     name: string;
     priceVnd: number;
+    quantity: number;
     imageUrl: string;
     condition: NonNullable<ReturnType<typeof parseCondition>>;
     set: NonNullable<ReturnType<typeof findSet>>;
@@ -199,6 +207,7 @@ export async function createBulkCardsAction(
     const name = names[index] ?? "";
     const imageUrl = normalizeStoredImage(images[index] ?? "");
     const priceVnd = parseVnd(prices[index] ?? null);
+    const quantity = parseQuantity(quantities[index] ?? null);
     const set = findSet(setIds[index] ?? "");
     const condition = parseCondition(conditions[index] ?? null);
     if (!set) return { error: `${label}: chọn mùa.` };
@@ -206,7 +215,8 @@ export async function createBulkCardsAction(
     if (!imageUrl) return { error: `${label}: ảnh không hợp lệ.` };
     if (!isValidName(name)) return { error: `${label}: tên cần từ 2 đến 80 ký tự.` };
     if (!priceVnd) return { error: `${label}: giá bán VND cần từ 1.000 đến 100.000.000.` };
-    rows.push({ name, priceVnd, imageUrl, set, condition });
+    if (quantity === null || quantity < 1) return { error: `${label}: số lượng cần từ 1 đến 99.` };
+    rows.push({ name, priceVnd, quantity, imageUrl, set, condition });
   }
   for (const row of rows) {
     const card = await insertManualCard({
@@ -225,7 +235,7 @@ export async function createBulkCardsAction(
     await saveListing({
       cardId: card.id,
       condition: row.condition,
-      quantity: 1,
+      quantity: row.quantity,
       sourcePrice: row.priceVnd,
       sourceCurrency: "VND",
       sourceUrl: null,

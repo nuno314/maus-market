@@ -18,6 +18,7 @@ type DraftCard = {
   url: string;
   name: string;
   price: string;
+  quantity: string;
   setId: string;
   condition: Condition;
 };
@@ -61,6 +62,7 @@ export function BulkCardForm() {
           url: data.url,
           name: nameFromFile(file),
           price: "",
+          quantity: "1",
           setId: SEASONS[0]?.key ?? "",
           condition: "A",
         });
@@ -73,7 +75,7 @@ export function BulkCardForm() {
     }
   }
 
-  function updateRow(id: string, patch: Partial<Pick<DraftCard, "name" | "price" | "setId" | "condition">>) {
+  function updateRow(id: string, patch: Partial<Pick<DraftCard, "name" | "price" | "quantity" | "setId" | "condition">>) {
     setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   }
 
@@ -81,7 +83,7 @@ export function BulkCardForm() {
     <section className="rounded-3xl bg-white p-4 ring-1 ring-[#d5e3f0] sm:p-5">
       <h2 className="font-extrabold">Đăng nhiều thẻ</h2>
       <p className="mt-1 text-sm text-[#5d7388]">
-        Bấm dấu cộng để tải nhiều ảnh một lúc. Mỗi thẻ chọn mùa, condition, tên và giá riêng. Số lượng mỗi thẻ là 1.
+        Bấm dấu cộng để tải nhiều ảnh một lúc. Mỗi thẻ chọn mùa, condition, tên, số lượng và giá riêng.
       </p>
       <form action={action} className="mt-3 grid gap-3">
         <label
@@ -154,7 +156,7 @@ export function BulkCardForm() {
                     </select>
                   </div>
                   </div>
-                  <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="grid gap-2 sm:grid-cols-[1fr_9rem_5.5rem]">
                     <div className="grid gap-1">
                       <Label htmlFor={`bulk-name-${row.id}`}>Tên thẻ {index + 1}</Label>
                       <Input
@@ -178,6 +180,20 @@ export function BulkCardForm() {
                         onChange={(event) => updateRow(row.id, { price: event.target.value })}
                         className={field}
                         placeholder="150000"
+                      />
+                    </div>
+                    <div className="grid gap-1">
+                      <Label htmlFor={`bulk-qty-${row.id}`}>Số lượng</Label>
+                      <Input
+                        id={`bulk-qty-${row.id}`}
+                        name="quantity"
+                        type="number"
+                        min={1}
+                        max={99}
+                        required
+                        value={row.quantity}
+                        onChange={(event) => updateRow(row.id, { quantity: event.target.value })}
+                        className={field}
                       />
                     </div>
                   </div>
