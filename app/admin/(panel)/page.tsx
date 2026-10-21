@@ -7,6 +7,7 @@ import {
   updateQuantityAction,
 } from "@/app/actions/admin";
 import { CreateListingForm, ManualListingForm } from "@/components/admin-forms";
+import { BulkCardForm } from "@/components/bulk-card-form";
 import { EditListingForm } from "@/components/edit-listing-form";
 import { CardThumb } from "@/components/card-thumb";
 import { ProductMeta } from "@/components/product-meta";
@@ -97,6 +98,8 @@ export default async function AdminHomePage({
         ) : null}
         {selected && quote ? <CreateListingForm card={selected} condition={condition} query={q} quote={quote} /> : null}
       </section>
+
+      <BulkCardForm />
 
       <ManualListingForm />
 
@@ -191,7 +194,7 @@ function Notice({ query }: { query: Record<string, string | string[] | undefined
   return (
     <div className="rounded-2xl bg-[#eef7f1] px-4 py-3 text-sm text-[#24573a]">
       {synced ? <p>Đã lưu {synced} lá từ catalog.{skip ? ` Chưa đồng bộ: ${skip}.` : ""}</p> : null}
-      {listed ? <p>Đã đăng sản phẩm lên shop.</p> : null}
+      {listed ? <p>Đã đăng {listed} sản phẩm lên shop.</p> : null}
       {edited ? <p>Đã lưu thay đổi sản phẩm.</p> : null}
       {priced ? (
         <p>

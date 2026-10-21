@@ -26,6 +26,7 @@ import {
 import {
   collectImages,
   isValidName,
+  normalizeStoredImage,
   parseCategory,
   parseCondition,
   parseMoney,
@@ -166,6 +167,75 @@ export async function createManualListingAction(
   }
   refreshShop();
   redirect("/admin?listed=1");
+}
+
+const MAX_BULK_CARDS = 40;
+
+export async function createBulkCardsAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  await requireAdmin();
+  const names = formData.getAll("name").map((value) => String(value).trim());
+  const prices = formData.getAll("priceVnd");
+  const images = formData.getAll("image").map((value) => String(value));
+  const setIds = formData.getAll("setId").map((value) => String(value));
+  const conditions = formData.getAll("condition");
+  const count = names.length;
+  if (count === 0) return { error: "Chọn ảnh các thẻ cần đăng." };
+  if (count > MAX_BULK_CARDS) return { error: `Mỗi lần đăng tối đa ${MAX_BULK_CARDS} thẻ.` };
+  if (prices.length !== count || images.length !== count || setIds.length !== count || conditions.length !== count) {
+    return { error: "Danh sách thẻ không khớp. Tải lại trang rồi thử lại." };
+  }
+  const rows: {
+    name: string;
+    priceVnd: number;
+    imageUrl: string;
+    condition: NonNullable<ReturnType<typeof parseCondition>>;
+    set: NonNullable<ReturnType<typeof findSet>>;
+  }[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const label = `Thẻ ${index + 1}`;
+    const name = names[index] ?? "";
+    const imageUrl = normalizeStoredImage(images[index] ?? "");
+    const priceVnd = parseVnd(prices[index] ?? null);
+    const set = findSet(setIds[index] ?? "");
+    const condition = parseCondition(conditions[index] ?? null);
+    if (!set) return { error: `${label}: chọn mùa.` };
+    if (!condition) return { error: `${label}: chọn condition.` };
+    if (!imageUrl) return { error: `${label}: ảnh không hợp lệ.` };
+    if (!isValidName(name)) return { error: `${label}: tên cần từ 2 đến 80 ký tự.` };
+    if (!priceVnd) return { error: `${label}: giá bán VND cần từ 1.000 đến 100.000.000.` };
+    rows.push({ name, priceVnd, imageUrl, set, condition });
+  }
+  for (const row of rows) {
+    const card = await insertManualCard({
+      language: row.set.language,
+      setId: row.set.tcgdexId ?? row.set.seasonKey,
+      setName: row.set.name,
+      setCode: row.set.code,
+      seasonKey: row.set.seasonKey,
+      number: "",
+      name: row.name,
+      imageUrl: row.imageUrl,
+      images: [row.imageUrl],
+      category: "card",
+      description: "",
+    });
+    await saveListing({
+      cardId: card.id,
+      condition: row.condition,
+      quantity: 1,
+      sourcePrice: row.priceVnd,
+      sourceCurrency: "VND",
+      sourceUrl: null,
+      sourceLabel: "Giá nhập tay",
+      conditionPriced: true,
+      priceVnd: row.priceVnd,
+    });
+  }
+  refreshShop();
+  redirect(`/admin?listed=${rows.length}`);
 }
 
 export async function updateListingAction(
