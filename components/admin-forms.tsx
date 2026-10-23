@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useRef, useState, type FormEvent } from "react";
 import {
   createListingAction,
   createManualListingAction,
@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { formatSource, formatVnd, type PriceSettings } from "@/lib/money";
-import { ImageField } from "@/components/image-field";
+import { ImageField, type ImageFieldHandle } from "@/components/image-field";
 import { SeasonNav } from "@/components/season-nav";
 import { CATEGORIES, CONDITIONS, SEASONS, hasSeason, setCaption, type Category, type Condition } from "@/lib/sets";
 import type { CardRow } from "@/lib/store";
@@ -145,8 +145,30 @@ export function ManualListingForm() {
   const [category, setCategory] = useState<Category>("card");
   const [setId, setSetId] = useState(SEASONS[0]?.key ?? "");
   const [uploading, setUploading] = useState(false);
+  const imagesRef = useRef<ImageFieldHandle>(null);
+  const passSubmit = useRef(false);
   const isCard = category === "card";
   const seasonal = hasSeason(category);
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    if (passSubmit.current) {
+      passSubmit.current = false;
+      return;
+    }
+    if (!imagesRef.current?.hasLocal()) return;
+    event.preventDefault();
+    const form = event.currentTarget;
+    setUploading(true);
+    try {
+      await imagesRef.current.flush();
+      passSubmit.current = true;
+      form.requestSubmit();
+    } catch {
+      // The image field shows the upload error.
+    } finally {
+      setUploading(false);
+    }
+  }
 
   return (
     <section className="rounded-3xl bg-white p-4 ring-1 ring-[#d5e3f0] sm:p-5">
@@ -154,7 +176,7 @@ export function ManualListingForm() {
       <p className="mt-1 text-sm text-[#5d7388]">
         Nhập thẻ, hộp, pack, binder, sleeves hoặc top loader. Phụ kiện không cần chọn mùa. Có thể thêm nhiều ảnh.
       </p>
-      <form action={action} className="mt-3 grid gap-3">
+      <form action={action} className="mt-3 grid gap-3" onSubmit={onSubmit}>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="grid gap-1.5">
             <Label htmlFor="category">Loại</Label>
@@ -200,7 +222,7 @@ export function ManualListingForm() {
           <Label htmlFor="description">Mô tả</Label>
           <Textarea id="description" name="description" maxLength={400} rows={3} className="rounded-xl bg-white" placeholder="Tình trạng hộp, seal, nội dung đi kèm..." />
         </div>
-        <ImageField initial={[]} onBusyChange={setUploading} />
+        <ImageField ref={imagesRef} initial={[]} />
         <div className={`grid gap-3 ${isCard ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
           {isCard ? (
             <div className="grid gap-1.5">

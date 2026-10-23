@@ -1,14 +1,14 @@
 "use client";
 
-import { useActionState, useState } from "react";
-import { Plus } from "lucide-react";
+import { useActionState, useEffect, useRef, useState, type FormEvent } from "react";
+import { Loader2, Plus } from "lucide-react";
 import { createBulkCardsAction } from "@/app/actions/admin";
 import { CardThumb } from "@/components/card-thumb";
 import { SubmitButton } from "@/components/submit-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CONDITIONS, ERAS, SEASONS, type Condition } from "@/lib/sets";
-import { uploadProductImage } from "@/lib/upload-client";
+import { imageFileError, uploadProductImage } from "@/lib/upload-client";
 
 const field = "h-11 rounded-xl bg-white";
 const selectClass = `${field} w-full border border-[#d5e3f0] px-3`;
@@ -16,7 +16,10 @@ const MAX_BULK_CARDS = 40;
 
 type DraftCard = {
   id: string;
+  file: File;
+  preview: string;
   url: string;
+  phase: "idle" | "uploading" | "queued";
   name: string;
   price: string;
   quantity: string;
@@ -38,38 +41,82 @@ export function BulkCardForm() {
   const [rows, setRows] = useState<DraftCard[]>([]);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const rowsRef = useRef(rows);
+  const passSubmit = useRef(false);
+  const resumeForm = useRef<HTMLFormElement | null>(null);
+  rowsRef.current = rows;
 
-  async function addFiles(list: FileList | null) {
+  useEffect(() => {
+    const form = resumeForm.current;
+    if (!form || rows.some((row) => !row.url)) return;
+    resumeForm.current = null;
+    passSubmit.current = true;
+    form.requestSubmit();
+  }, [rows]);
+
+  function addFiles(list: FileList | null) {
     if (!list || list.length === 0) return;
     setError(null);
-    setUploading(true);
     const next = [...rows];
-    try {
-      for (const file of Array.from(list)) {
-        if (next.length >= MAX_BULK_CARDS) {
-          setError(`Mỗi lần đăng tối đa ${MAX_BULK_CARDS} thẻ.`);
-          break;
-        }
-        let url = "";
-        try {
-          url = await uploadProductImage(file);
-        } catch (uploadError) {
-          setError(uploadError instanceof Error ? uploadError.message : "Không tải được ảnh.");
-          break;
-        }
-        next.push({
-          id: `${Date.now()}-${next.length}-${file.name}`,
-          url,
-          name: nameFromFile(file),
-          price: "",
-          quantity: "1",
-          setId: SEASONS[0]?.key ?? "",
-          condition: "A",
-        });
+    for (const file of Array.from(list)) {
+      if (next.length >= MAX_BULK_CARDS) {
+        setError(`Mỗi lần đăng tối đa ${MAX_BULK_CARDS} thẻ.`);
+        break;
       }
+      const problem = imageFileError(file);
+      if (problem) {
+        setError(problem);
+        break;
+      }
+      next.push({
+        id: `${Date.now()}-${next.length}-${file.name}`,
+        file,
+        preview: URL.createObjectURL(file),
+        url: "",
+        phase: "idle",
+        name: nameFromFile(file),
+        price: "",
+        quantity: "1",
+        setId: SEASONS[0]?.key ?? "",
+        condition: "A",
+      });
+    }
+    setRows(next);
+  }
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    if (passSubmit.current) {
+      passSubmit.current = false;
+      return;
+    }
+    const current = rowsRef.current;
+    if (!current.some((row) => !row.url)) return;
+    event.preventDefault();
+    const form = event.currentTarget;
+    setUploading(true);
+    setError(null);
+    const next = [...current];
+    try {
+      for (let index = 0; index < next.length; index += 1) {
+        const row = next[index]!;
+        if (row.url) continue;
+        const activeId = row.id;
+        setRows((items) =>
+          items.map((item) => {
+            if (item.url) return item;
+            if (item.id === activeId) return { ...item, phase: "uploading" };
+            const waiting = next.slice(index + 1).some((later) => !later.url && later.id === item.id);
+            return waiting ? { ...item, phase: "queued" } : item;
+          }),
+        );
+        const url = await uploadProductImage(row.file);
+        next[index] = { ...row, url, phase: "idle" };
+      }
+      resumeForm.current = form;
       setRows(next);
-    } catch {
-      setError("Không tải được ảnh.");
+    } catch (uploadError) {
+      setRows(next.map((row) => ({ ...row, phase: "idle" })));
+      setError(uploadError instanceof Error ? uploadError.message : "Không tải được ảnh.");
     } finally {
       setUploading(false);
     }
@@ -83,9 +130,9 @@ export function BulkCardForm() {
     <section className="rounded-3xl bg-white p-4 ring-1 ring-[#d5e3f0] sm:p-5">
       <h2 className="font-extrabold">Đăng nhiều thẻ</h2>
       <p className="mt-1 text-sm text-[#5d7388]">
-        Bấm dấu cộng để tải nhiều ảnh một lúc. Mỗi thẻ chọn mùa, condition, tên, số lượng và giá riêng.
+        Bấm dấu cộng để chọn nhiều ảnh. Ảnh nằm trên máy cho đến khi bấm đăng. Mỗi thẻ chọn mùa, condition, tên, số lượng và giá riêng.
       </p>
-      <form action={action} className="mt-3 grid gap-3">
+      <form action={action} className="mt-3 grid gap-3" onSubmit={onSubmit}>
         <label
           htmlFor="bulk-images"
           className={`flex h-28 cursor-pointer flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-[#8eb8d6] bg-[#f7fbfe] text-[#1a4f86] ${uploading ? "pointer-events-none opacity-60" : ""}`}
@@ -109,8 +156,18 @@ export function BulkCardForm() {
           <ul className="grid gap-3">
             {rows.map((row, index) => (
               <li key={row.id} className="grid gap-3 rounded-2xl bg-[#f7fbfe] p-3 ring-1 ring-[#d5e3f0] sm:grid-cols-[5.5rem_1fr_auto]">
-                <input type="hidden" name="image" value={row.url} />
-                <CardThumb src={row.url} alt="" className="h-24 w-[4.5rem] rounded-xl" />
+                {row.url ? <input type="hidden" name="image" value={row.url} /> : null}
+                <div className="relative">
+                  <CardThumb src={row.url || row.preview} alt="" className="h-24 w-[4.5rem] rounded-xl" />
+                  {row.phase === "idle" && !row.url ? (
+                    <span className="absolute bottom-1 left-1 rounded-full bg-white/95 px-1.5 py-0.5 text-[10px] font-bold text-[#1a4f86]">Máy</span>
+                  ) : null}
+                  {row.phase !== "idle" ? (
+                    <div className="absolute inset-0 grid place-items-center rounded-xl bg-[#24344a]/45 text-white">
+                      {row.phase === "uploading" ? <Loader2 className="size-5 animate-spin" aria-hidden /> : <span className="text-[10px] font-bold">Chờ</span>}
+                    </div>
+                  ) : null}
+                </div>
                 <div className="grid gap-2">
                   <div className="grid gap-2 sm:grid-cols-2">
                   <div className="grid gap-1">
@@ -201,7 +258,10 @@ export function BulkCardForm() {
                 <button
                   type="button"
                   className="h-10 self-end rounded-full px-3 text-sm font-semibold text-[#8a3b3b] ring-1 ring-[#d5e3f0]"
-                  onClick={() => setRows((current) => current.filter((item) => item.id !== row.id))}
+                  onClick={() => {
+                    URL.revokeObjectURL(row.preview);
+                    setRows((current) => current.filter((item) => item.id !== row.id));
+                  }}
                 >
                   Bỏ
                 </button>

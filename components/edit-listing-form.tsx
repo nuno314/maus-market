@@ -1,8 +1,8 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useRef, useState, type FormEvent } from "react";
 import { updateListingAction } from "@/app/actions/admin";
-import { ImageField } from "@/components/image-field";
+import { ImageField, type ImageFieldHandle } from "@/components/image-field";
 import { SeasonNav } from "@/components/season-nav";
 import { SubmitButton } from "@/components/submit-button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,28 @@ export function EditListingForm({ listing }: { listing: ShopListing }) {
   const [category, setCategory] = useState<Category>(listing.category);
   const [setId, setSetId] = useState(listing.seasonKey || SEASONS[0]?.key || "");
   const [uploading, setUploading] = useState(false);
+  const imagesRef = useRef<ImageFieldHandle>(null);
+  const passSubmit = useRef(false);
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    if (passSubmit.current) {
+      passSubmit.current = false;
+      return;
+    }
+    if (!imagesRef.current?.hasLocal()) return;
+    event.preventDefault();
+    const form = event.currentTarget;
+    setUploading(true);
+    try {
+      await imagesRef.current.flush();
+      passSubmit.current = true;
+      form.requestSubmit();
+    } catch {
+      // The image field shows the upload error.
+    } finally {
+      setUploading(false);
+    }
+  }
   const manual = listing.manual === 1;
   const activeCategory = manual ? category : listing.category;
   const isCard = activeCategory === "card";
@@ -35,7 +57,7 @@ export function EditListingForm({ listing }: { listing: ShopListing }) {
   }
 
   return (
-    <form action={action} className="mt-3 grid w-full gap-3 rounded-2xl bg-[#f7fbfe] p-3 ring-1 ring-[#d5e3f0]">
+    <form action={action} className="mt-3 grid w-full gap-3 rounded-2xl bg-[#f7fbfe] p-3 ring-1 ring-[#d5e3f0]" onSubmit={onSubmit}>
       <input type="hidden" name="id" value={listing.id} />
       <div className="flex items-center justify-between gap-2">
         <p className="font-extrabold">Sửa sản phẩm</p>
@@ -94,7 +116,7 @@ export function EditListingForm({ listing }: { listing: ShopListing }) {
         <Label htmlFor={`description-${listing.id}`}>Mô tả</Label>
         <Textarea id={`description-${listing.id}`} name="description" maxLength={400} rows={3} defaultValue={listing.description} className="rounded-xl bg-white" />
       </div>
-      <ImageField key={listing.id} initial={listing.images.length ? listing.images : [listing.imageUrl]} onBusyChange={setUploading} />
+      <ImageField ref={imagesRef} key={listing.id} initial={listing.images.length ? listing.images : [listing.imageUrl]} />
       <div className={`grid gap-3 ${isCard ? "sm:grid-cols-3" : canEditPrice ? "sm:grid-cols-2" : ""}`}>
         {isCard ? (
           <div className="grid gap-1.5">
