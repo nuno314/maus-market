@@ -183,7 +183,7 @@ export function ImageField({
       )}
       <Label>Ảnh</Label>
       <p className="text-xs text-[#5d7388]">
-        Ảnh mới chỉ hiện trên máy cho đến khi lưu. Kéo để đổi thứ tự. Ảnh đầu tiên là ảnh bìa. Tối đa {MAX_PRODUCT_IMAGES} ảnh, mỗi ảnh {MAX_IMAGE_MB} MB.
+        Kéo để đổi thứ tự. Ảnh đầu tiên là ảnh bìa. Tối đa {MAX_PRODUCT_IMAGES} ảnh, mỗi ảnh {MAX_IMAGE_MB} MB.
       </p>
       <ul className="grid grid-cols-3 gap-3 sm:grid-cols-4">
         {photos.map((photo, index) => {
@@ -220,9 +220,6 @@ export function ImageField({
               <span className="absolute bottom-1.5 left-1.5 rounded-full bg-[#24344a] px-2 py-0.5 text-[10px] font-bold text-white">
                 {index === 0 ? "Bìa" : index + 1}
               </span>
-              {photo.kind === "local" && photo.phase === "idle" ? (
-                <span className="absolute top-1.5 left-1.5 rounded-full bg-white/95 px-2 py-0.5 text-[10px] font-bold text-[#1a4f86]">Máy</span>
-              ) : null}
               {photo.kind === "local" && photo.phase !== "idle" ? (
                 <div className="absolute inset-0 grid place-items-center bg-[#24344a]/45 text-white">
                   {photo.phase === "uploading" ? (

@@ -130,7 +130,7 @@ export function BulkCardForm() {
     <section className="rounded-3xl bg-white p-4 ring-1 ring-[#d5e3f0] sm:p-5">
       <h2 className="font-extrabold">Đăng nhiều thẻ</h2>
       <p className="mt-1 text-sm text-[#5d7388]">
-        Bấm dấu cộng để chọn nhiều ảnh. Ảnh nằm trên máy cho đến khi bấm đăng. Mỗi thẻ chọn mùa, condition, tên, số lượng và giá riêng.
+        Bấm dấu cộng để chọn nhiều ảnh. Mỗi thẻ chọn mùa, condition, tên, số lượng và giá riêng.
       </p>
       <form action={action} className="mt-3 grid gap-3" onSubmit={onSubmit}>
         <label
@@ -159,9 +159,6 @@ export function BulkCardForm() {
                 {row.url ? <input type="hidden" name="image" value={row.url} /> : null}
                 <div className="relative">
                   <CardThumb src={row.url || row.preview} alt="" className="h-24 w-[4.5rem] rounded-xl" />
-                  {row.phase === "idle" && !row.url ? (
-                    <span className="absolute bottom-1 left-1 rounded-full bg-white/95 px-1.5 py-0.5 text-[10px] font-bold text-[#1a4f86]">Máy</span>
-                  ) : null}
                   {row.phase !== "idle" ? (
                     <div className="absolute inset-0 grid place-items-center rounded-xl bg-[#24344a]/45 text-white">
                       {row.phase === "uploading" ? <Loader2 className="size-5 animate-spin" aria-hidden /> : <span className="text-[10px] font-bold">Chờ</span>}
