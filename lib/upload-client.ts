@@ -17,34 +17,40 @@ export function imageFileError(file: File): string | null {
   return null;
 }
 
-let blobMode: boolean | null = null;
+const SERVER_BODY_LIMIT = 4 * 1024 * 1024;
 
-async function usesBlob(): Promise<boolean> {
-  if (blobMode !== null) return blobMode;
+let clientUpload: boolean | null = null;
+
+async function canClientUpload(): Promise<boolean> {
+  if (clientUpload !== null) return clientUpload;
   const response = await fetch("/api/upload");
-  const data = (await response.json().catch(() => ({}))) as { blob?: boolean; error?: string };
+  const data = (await response.json().catch(() => ({}))) as { client?: boolean; error?: string };
   if (!response.ok) throw new Error(data.error || "Không tải được ảnh.");
-  blobMode = Boolean(data.blob);
-  return blobMode;
+  clientUpload = Boolean(data.client);
+  return clientUpload;
 }
 
-async function uploadToBlob(file: File, access: "public" | "private" = "public"): Promise<string> {
+async function putWithClient(file: File, access: "public" | "private"): Promise<string> {
   const ext = extension(file)!;
   const pathname = `uploads/${Date.now()}-${Math.random().toString(16).slice(2, 10)}.${ext}`;
+  const blob = await upload(pathname, file, {
+    access,
+    handleUploadUrl: "/api/upload",
+    contentType: file.type || (ext === "jpg" ? "image/jpeg" : `image/${ext}`),
+  });
+  if (access === "private") return `/api/media?pathname=${encodeURIComponent(blob.pathname)}`;
+  return blob.url;
+}
+
+async function uploadToBlob(file: File): Promise<string> {
   try {
-    const blob = await upload(pathname, file, {
-      access,
-      handleUploadUrl: "/api/upload",
-      contentType: file.type || (ext === "jpg" ? "image/jpeg" : `image/${ext}`),
-    });
-    if (access === "private") return `/api/media?pathname=${encodeURIComponent(blob.pathname)}`;
-    return blob.url;
+    return await putWithClient(file, "private");
   } catch (error) {
-    const message = error instanceof Error ? error.message : "";
-    if (access === "public" && message.toLowerCase().includes("private store")) {
-      return uploadToBlob(file, "private");
+    const message = error instanceof Error ? error.message.toLowerCase() : "";
+    if (message.includes("public store") || message.includes("public access")) {
+      return putWithClient(file, "public");
     }
-    throw new Error(message || "Không tải được ảnh.");
+    throw new Error(error instanceof Error && error.message ? error.message : "Không lưu được ảnh.");
   }
 }
 
@@ -53,13 +59,16 @@ async function uploadToServer(file: File): Promise<string> {
   body.set("image", file);
   const response = await fetch("/api/upload", { method: "POST", body });
   const data = (await response.json().catch(() => ({}))) as { url?: string; error?: string };
-  if (!response.ok || !data.url) throw new Error(data.error || "Không tải được ảnh.");
+  if (!response.ok || !data.url) {
+    if (response.status === 413) throw new Error(`Ảnh lớn hơn mức server nhận trực tiếp. Mỗi ảnh tối đa ${MAX_IMAGE_MB} MB khi Blob đã gắn token.`);
+    throw new Error(data.error || "Không tải được ảnh.");
+  }
   return data.url;
 }
 
 export async function uploadProductImage(file: File): Promise<string> {
   const problem = imageFileError(file);
   if (problem) throw new Error(problem);
-  if (await usesBlob()) return uploadToBlob(file);
+  if (file.size > SERVER_BODY_LIMIT && (await canClientUpload())) return uploadToBlob(file);
   return uploadToServer(file);
 }

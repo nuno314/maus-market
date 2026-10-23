@@ -17,7 +17,7 @@ export async function GET() {
   const session = await adminSession();
   if (!session) return Response.json({ error: "Cần đăng nhập admin." }, { status: 401 });
   return Response.json({
-    blob: Boolean(process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID),
+    client: Boolean(process.env.BLOB_READ_WRITE_TOKEN),
   });
 }
 

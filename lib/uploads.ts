@@ -35,8 +35,9 @@ function blobDetail(error: unknown): string {
   return error.message.replace(/vercel_blob_\S+/gi, "").trim();
 }
 
-function isPrivateStoreError(error: unknown): boolean {
-  return blobDetail(error).toLowerCase().includes("private store");
+function isPublicStoreError(error: unknown): boolean {
+  const detail = blobDetail(error).toLowerCase();
+  return detail.includes("public store") || detail.includes("public access");
 }
 
 async function putBlob(name: string, body: Buffer, contentType: string, access: "public" | "private"): Promise<PutBlobResult> {
@@ -52,18 +53,18 @@ export async function saveUploadedImage(file: File): Promise<string | null> {
     const body = Buffer.from(await file.arrayBuffer());
     const contentType = contentTypeFor(file, ext);
     try {
-      const blob = await putBlob(name, body, contentType, "public");
-      return blob.url;
+      const blob = await putBlob(name, body, contentType, "private");
+      return `/api/media?pathname=${encodeURIComponent(blob.pathname)}`;
     } catch (error) {
-      if (!isPrivateStoreError(error)) {
+      if (!isPublicStoreError(error)) {
         const detail = blobDetail(error);
         throw new UploadError(detail ? `Không lưu được ảnh lên Blob. ${detail}` : "Không lưu được ảnh lên Blob.");
       }
       try {
-        const blob = await putBlob(name, body, contentType, "private");
-        return `/api/media?pathname=${encodeURIComponent(blob.pathname)}`;
-      } catch (privateError) {
-        const detail = blobDetail(privateError);
+        const blob = await putBlob(name, body, contentType, "public");
+        return blob.url;
+      } catch (publicError) {
+        const detail = blobDetail(publicError);
         throw new UploadError(detail ? `Không lưu được ảnh lên Blob. ${detail}` : "Không lưu được ảnh lên Blob.");
       }
     }
