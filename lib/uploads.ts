@@ -2,8 +2,7 @@ import { randomBytes } from "crypto";
 import fs from "fs";
 import path from "path";
 import { put, type PutBlobResult } from "@vercel/blob";
-
-const MAX_BYTES = 5 * 1024 * 1024;
+import { MAX_IMAGE_BYTES } from "@/lib/images";
 
 const MIME_EXT: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -46,7 +45,7 @@ async function putBlob(name: string, body: Buffer, contentType: string, access: 
 
 export async function saveUploadedImage(file: File): Promise<string | null> {
   const ext = extensionFor(file);
-  if (!ext || file.size <= 0 || file.size > MAX_BYTES) return null;
+  if (!ext || file.size <= 0 || file.size > MAX_IMAGE_BYTES) return null;
   const name = `${Date.now()}-${randomBytes(4).toString("hex")}.${ext}`;
   const hasBlob = Boolean(process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID);
   if (hasBlob) {

@@ -1,4 +1,6 @@
 export const MAX_PRODUCT_IMAGES = 8;
+export const MAX_IMAGE_MB = 15;
+export const MAX_IMAGE_BYTES = MAX_IMAGE_MB * 1024 * 1024;
 
 export function parseStoredImages(raw: string | null | undefined, fallback = ""): string[] {
   if (raw?.trim()) {

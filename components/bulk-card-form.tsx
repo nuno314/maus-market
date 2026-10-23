@@ -8,6 +8,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CONDITIONS, ERAS, SEASONS, type Condition } from "@/lib/sets";
+import { uploadProductImage } from "@/lib/upload-client";
 
 const field = "h-11 rounded-xl bg-white";
 const selectClass = `${field} w-full border border-[#d5e3f0] px-3`;
@@ -49,17 +50,16 @@ export function BulkCardForm() {
           setError(`Mỗi lần đăng tối đa ${MAX_BULK_CARDS} thẻ.`);
           break;
         }
-        const body = new FormData();
-        body.set("image", file);
-        const response = await fetch("/api/upload", { method: "POST", body });
-        const data = (await response.json()) as { url?: string; error?: string };
-        if (!response.ok || !data.url) {
-          setError(data.error || "Không tải được ảnh.");
+        let url = "";
+        try {
+          url = await uploadProductImage(file);
+        } catch (uploadError) {
+          setError(uploadError instanceof Error ? uploadError.message : "Không tải được ảnh.");
           break;
         }
         next.push({
           id: `${Date.now()}-${next.length}-${file.name}`,
-          url: data.url,
+          url,
           name: nameFromFile(file),
           price: "",
           quantity: "1",
