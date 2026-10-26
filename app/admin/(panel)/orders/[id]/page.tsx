@@ -31,7 +31,14 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
             <h1 className="text-2xl font-extrabold">{order.code}</h1>
             <p className="text-sm text-[#5d7388]">{formatWhen(order.createdAt)}</p>
           </div>
-          <p className="text-xl font-extrabold">{formatVnd(order.totalVnd)}</p>
+          <div className="text-right">
+            {order.discountVnd > 0 ? (
+              <p className="text-sm text-[#2f6f4e]">
+                Mã {order.voucherCode} −{formatVnd(order.discountVnd)}
+              </p>
+            ) : null}
+            <p className="text-xl font-extrabold">{formatVnd(order.totalVnd)}</p>
+          </div>
         </div>
         <dl className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
           <div>

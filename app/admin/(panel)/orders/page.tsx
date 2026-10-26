@@ -40,6 +40,7 @@ export default async function OrdersPage() {
                 </p>
                 <p className="mt-2 font-bold">
                   {order.itemCount} dòng · {formatVnd(order.totalVnd)}
+                  {order.discountVnd > 0 ? ` · mã ${order.voucherCode}` : ""}
                 </p>
               </Link>
             </li>

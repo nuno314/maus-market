@@ -50,7 +50,14 @@ export default async function OrderConfirmationPage({ params }: { params: Promis
           </li>
         ))}
       </ul>
-      <p className="mt-4 text-right text-xl font-extrabold">{formatVnd(order.totalVnd)}</p>
+      <div className="mt-4 text-right">
+        {order.discountVnd > 0 ? (
+          <p className="text-sm text-[#2f6f4e]">
+            Mã {order.voucherCode} giảm {formatVnd(order.discountVnd)}
+          </p>
+        ) : null}
+        <p className="text-xl font-extrabold">{formatVnd(order.totalVnd)}</p>
+      </div>
       <Link href="/" className="mt-4 inline-flex text-sm font-semibold text-[#1a4f86]">
         Tiếp tục xem thẻ
       </Link>

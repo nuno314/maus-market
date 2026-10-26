@@ -13,7 +13,6 @@ export const metadata: Metadata = {
     template: "%s · Maus Collect",
   },
   description: "Shop thẻ Pokémon Mega Evolution. Giá tiếng Anh theo TCGPlayer, tiếng Nhật theo Cardrush.",
-  icons: { icon: "/logo.png" },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

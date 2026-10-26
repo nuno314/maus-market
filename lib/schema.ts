@@ -52,6 +52,22 @@ export const orders = sqliteTable("orders", {
   status: text("status").notNull(),
   createdAt: text("created_at").notNull(),
   userId: integer("user_id"),
+  voucherCode: text("voucher_code"),
+  discountVnd: integer("discount_vnd").notNull().default(0),
+});
+
+export const vouchers = sqliteTable("vouchers", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  code: text("code").notNull().unique(),
+  kind: text("kind").notNull(),
+  value: integer("value").notNull(),
+  minSubtotal: integer("min_subtotal").notNull().default(0),
+  usageLimit: integer("usage_limit"),
+  usedCount: integer("used_count").notNull().default(0),
+  active: integer("active").notNull().default(1),
+  expiresAt: text("expires_at"),
+  note: text("note").notNull().default(""),
+  createdAt: text("created_at").notNull(),
 });
 
 export const users = sqliteTable("users", {

@@ -60,7 +60,25 @@ CREATE TABLE IF NOT EXISTS orders (
   shipping_address TEXT,
   status TEXT NOT NULL,
   created_at TEXT NOT NULL,
-  user_id INTEGER
+  user_id INTEGER,
+  voucher_code TEXT,
+  discount_vnd INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS orders_phone ON orders(zalo_phone);
+
+CREATE TABLE IF NOT EXISTS vouchers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  code TEXT NOT NULL UNIQUE,
+  kind TEXT NOT NULL,
+  value INTEGER NOT NULL,
+  min_subtotal INTEGER NOT NULL DEFAULT 0,
+  usage_limit INTEGER,
+  used_count INTEGER NOT NULL DEFAULT 0,
+  active INTEGER NOT NULL DEFAULT 1,
+  expires_at TEXT,
+  note TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS users (
@@ -90,7 +108,7 @@ CREATE TABLE IF NOT EXISTS order_items (
 
 type Db = ReturnType<typeof drizzle<typeof schema>>;
 
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 
 const globalForDb = globalThis as unknown as {
   mausClient?: Promise<Client>;
@@ -147,6 +165,12 @@ async function openDatabase() {
   const orderColumns = await columnNames(client, "orders");
   if (!orderColumns.includes("user_id")) {
     await client.execute(`ALTER TABLE orders ADD COLUMN user_id INTEGER`);
+  }
+  if (!orderColumns.includes("voucher_code")) {
+    await client.execute(`ALTER TABLE orders ADD COLUMN voucher_code TEXT`);
+  }
+  if (!orderColumns.includes("discount_vnd")) {
+    await client.execute(`ALTER TABLE orders ADD COLUMN discount_vnd INTEGER NOT NULL DEFAULT 0`);
   }
   const settings = await client.execute("SELECT id FROM settings WHERE id = 1");
   if (settings.rows.length === 0) {

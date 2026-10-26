@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { placeOrderAction } from "@/app/actions/checkout";
+import { placeOrderAction, previewVoucherAction } from "@/app/actions/checkout";
 import { useListingRows } from "@/components/cart-view";
 import { CardThumb } from "@/components/card-thumb";
 import { useCart } from "@/components/cart-provider";
@@ -21,6 +21,10 @@ export function CheckoutForm() {
   const [shipping, setShipping] = useState<"manual" | "later">("later");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
+  const [voucherInput, setVoucherInput] = useState("");
+  const [applied, setApplied] = useState<{ code: string; discount: number } | null>(null);
+  const [voucherError, setVoucherError] = useState("");
+  const [applying, setApplying] = useState(false);
 
   if (loading) {
     return <p className="text-sm text-[#5d7388]">Đang chuẩn bị đơn…</p>;
@@ -50,6 +54,22 @@ export function CheckoutForm() {
   }
 
   const total = lines.reduce((sum, line) => sum + line.listing.priceVnd * line.quantity, 0);
+  const discount = applied ? Math.min(applied.discount, total) : 0;
+  const payable = total - discount;
+
+  async function applyVoucher() {
+    setApplying(true);
+    setVoucherError("");
+    const result = await previewVoucherAction(voucherInput, total);
+    setApplying(false);
+    if (!result.ok) {
+      setApplied(null);
+      setVoucherError(result.error);
+      return;
+    }
+    setApplied({ code: result.code, discount: result.discount });
+    setVoucherInput(result.code);
+  }
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -114,6 +134,34 @@ export function CheckoutForm() {
       </section>
       <aside className="rounded-3xl bg-white p-4 ring-1 ring-[#d5e3f0] sm:p-5">
         <h2 className="text-lg font-extrabold">Đơn của bạn</h2>
+        <div className="mt-4 grid gap-2">
+          <Label htmlFor="voucherCode">Mã giảm giá</Label>
+          <div className="flex gap-2">
+            <Input
+              id="voucherCode"
+              name="voucherCode"
+              value={applied?.code ?? voucherInput}
+              onChange={(event) => {
+                setVoucherInput(event.target.value);
+                setApplied(null);
+                setVoucherError("");
+              }}
+              className="h-11 rounded-xl"
+              placeholder="MEGA10"
+              autoCapitalize="characters"
+            />
+            <button
+              type="button"
+              onClick={applyVoucher}
+              disabled={applying || voucherInput.trim().length < 3}
+              className="h-11 shrink-0 rounded-full bg-[#24344a] px-4 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {applying ? "Đang kiểm…" : "Áp dụng"}
+            </button>
+          </div>
+          {voucherError ? <p className="text-sm font-semibold text-[#8a3b3b]">{voucherError}</p> : null}
+          {discount > 0 ? <p className="text-sm font-semibold text-[#2f6f4e]">Giảm {formatVnd(discount)}</p> : null}
+        </div>
         <ul className="mt-3 grid gap-3">
           {lines.map((line) => (
             <li key={line.listing.id} className="flex gap-3">
@@ -128,9 +176,17 @@ export function CheckoutForm() {
             </li>
           ))}
         </ul>
-        <div className="mt-4 flex items-center justify-between border-t border-[#d5e3f0] pt-3 text-lg font-extrabold">
-          <span>Tổng</span>
-          <span>{formatVnd(total)}</span>
+        <div className="mt-4 grid gap-1 border-t border-[#d5e3f0] pt-3">
+          {discount > 0 ? (
+            <div className="flex items-center justify-between text-sm text-[#5d7388]">
+              <span>Tạm tính</span>
+              <span>{formatVnd(total)}</span>
+            </div>
+          ) : null}
+          <div className="flex items-center justify-between text-lg font-extrabold">
+            <span>Thanh toán</span>
+            <span>{formatVnd(payable)}</span>
+          </div>
         </div>
       </aside>
     </form>

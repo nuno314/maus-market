@@ -3,6 +3,7 @@ import { desc, eq, gt, inArray, like, or, sql } from "drizzle-orm";
 import type { Client } from "@libsql/client";
 import { getClient, getDb } from "@/lib/db";
 import { cards, listings, orderItems, orders, settings } from "@/lib/schema";
+import { isValidVoucherCode, lockVoucher, normalizeVoucherCode, releaseVoucher } from "@/lib/vouchers";
 import type { PriceSettings } from "@/lib/money";
 import type { Category, Condition, Language } from "@/lib/sets";
 import { parseStoredImages } from "@/lib/images";
@@ -60,6 +61,8 @@ export type OrderRow = {
   createdAt: string;
   itemCount: number;
   totalVnd: number;
+  discountVnd: number;
+  voucherCode: string | null;
 };
 
 export type OrderItemRow = {
@@ -517,58 +520,51 @@ export async function countNewOrders() {
   return row?.count ?? 0;
 }
 
+const ORDER_LIST_SQL = `SELECT o.id, o.code, o.zalo_phone as zaloPhone, o.zalo_name as zaloName,
+            o.shipping_method as shippingMethod, o.shipping_address as shippingAddress,
+            o.status, o.created_at as createdAt, o.voucher_code as voucherCode,
+            COALESCE(o.discount_vnd, 0) as discountVnd,
+            COUNT(i.id) as itemCount,
+            CASE WHEN COALESCE(SUM(i.quantity * i.unit_price_vnd), 0) > COALESCE(o.discount_vnd, 0)
+              THEN COALESCE(SUM(i.quantity * i.unit_price_vnd), 0) - COALESCE(o.discount_vnd, 0)
+              ELSE 0 END as totalVnd
+     FROM orders o
+     LEFT JOIN order_items i ON i.order_id = o.id`;
+
+function mapListedOrder(row: unknown): OrderRow {
+  const item = row as OrderRow;
+  return {
+    ...item,
+    id: Number(item.id),
+    shippingMethod: item.shippingMethod === "manual" ? "manual" : "later",
+    status: item.status as OrderStatus,
+    itemCount: Number(item.itemCount),
+    totalVnd: Number(item.totalVnd),
+    discountVnd: Number(item.discountVnd ?? 0),
+    voucherCode: item.voucherCode ? String(item.voucherCode) : null,
+  };
+}
+
 export async function listUserOrders(userId: number): Promise<OrderRow[]> {
   const client = await getClient();
   const result = await client.execute({
-    sql: `SELECT o.id, o.code, o.zalo_phone as zaloPhone, o.zalo_name as zaloName,
-            o.shipping_method as shippingMethod, o.shipping_address as shippingAddress,
-            o.status, o.created_at as createdAt,
-            COUNT(i.id) as itemCount,
-            COALESCE(SUM(i.quantity * i.unit_price_vnd), 0) as totalVnd
-     FROM orders o
-     LEFT JOIN order_items i ON i.order_id = o.id
+    sql: `${ORDER_LIST_SQL}
      WHERE o.user_id = ?
      GROUP BY o.id
      ORDER BY o.id DESC`,
     args: [userId],
   });
-  return result.rows.map((row) => {
-    const item = row as unknown as OrderRow;
-    return {
-      ...item,
-      id: Number(item.id),
-      shippingMethod: item.shippingMethod === "manual" ? "manual" : "later",
-      status: item.status as OrderStatus,
-      itemCount: Number(item.itemCount),
-      totalVnd: Number(item.totalVnd),
-    };
-  });
+  return result.rows.map(mapListedOrder);
 }
 
 export async function listOrders(): Promise<OrderRow[]> {
   const client = await getClient();
   const result = await client.execute(
-    `SELECT o.id, o.code, o.zalo_phone as zaloPhone, o.zalo_name as zaloName,
-            o.shipping_method as shippingMethod, o.shipping_address as shippingAddress,
-            o.status, o.created_at as createdAt,
-            COUNT(i.id) as itemCount,
-            COALESCE(SUM(i.quantity * i.unit_price_vnd), 0) as totalVnd
-     FROM orders o
-     LEFT JOIN order_items i ON i.order_id = o.id
+    `${ORDER_LIST_SQL}
      GROUP BY o.id
      ORDER BY o.id DESC`,
   );
-  return result.rows.map((row) => {
-    const item = row as unknown as OrderRow;
-    return {
-      ...item,
-      id: Number(item.id),
-      shippingMethod: item.shippingMethod === "manual" ? "manual" : "later",
-      status: item.status as OrderStatus,
-      itemCount: Number(item.itemCount),
-      totalVnd: Number(item.totalVnd),
-    };
-  });
+  return result.rows.map(mapListedOrder);
 }
 
 export async function getOrder(id: number): Promise<(OrderRow & { items: OrderItemRow[] }) | null> {
@@ -576,7 +572,8 @@ export async function getOrder(id: number): Promise<(OrderRow & { items: OrderIt
   const order = await db.select().from(orders).where(eq(orders.id, id)).get();
   if (!order) return null;
   const items = await db.select().from(orderItems).where(eq(orderItems.orderId, id)).all();
-  const totalVnd = items.reduce((sum, item) => sum + item.quantity * item.unitPriceVnd, 0);
+  const subtotalVnd = items.reduce((sum, item) => sum + item.quantity * item.unitPriceVnd, 0);
+  const discountVnd = order.discountVnd ?? 0;
   return {
     id: order.id,
     code: order.code,
@@ -587,7 +584,9 @@ export async function getOrder(id: number): Promise<(OrderRow & { items: OrderIt
     status: order.status as OrderStatus,
     createdAt: order.createdAt,
     itemCount: items.length,
-    totalVnd,
+    totalVnd: Math.max(0, subtotalVnd - discountVnd),
+    discountVnd,
+    voucherCode: order.voucherCode,
     items: items.map((item) => ({
       id: item.id,
       cardName: item.cardName,
@@ -615,10 +614,10 @@ export async function getOrderByCode(code: string) {
 export async function setOrderStatus(id: number, status: OrderStatus) {
   const client = await getClient();
   const currentResult = await client.execute({
-    sql: `SELECT status FROM orders WHERE id = ?`,
+    sql: `SELECT status, voucher_code as voucherCode FROM orders WHERE id = ?`,
     args: [id],
   });
-  const current = currentResult.rows[0] as unknown as { status: OrderStatus } | undefined;
+  const current = currentResult.rows[0] as unknown as { status: OrderStatus; voucherCode: string | null } | undefined;
   if (!current) return;
   if (current.status !== "cancelled" && status === "cancelled") {
     const itemResult = await client.execute({
@@ -639,6 +638,7 @@ export async function setOrderStatus(id: number, status: OrderStatus) {
         sql: `UPDATE orders SET status = ? WHERE id = ?`,
         args: [status, id],
       });
+      if (current.voucherCode) await releaseVoucher(tx, current.voucherCode);
       await tx.commit();
     } catch (error) {
       await tx.rollback();
@@ -663,13 +663,19 @@ export async function placeOrder(input: {
   shippingMethod: "manual" | "later";
   shippingAddress: string | null;
   userId: number | null;
+  voucherCode?: string | null;
 }): Promise<{ code: string }> {
+  let voucherCode: string | null = null;
+  if (input.voucherCode?.trim()) {
+    voucherCode = normalizeVoucherCode(input.voucherCode);
+    if (!isValidVoucherCode(voucherCode)) throw new Error("Mã giảm giá không hợp lệ.");
+  }
   const client = await getClient();
   const code = await makeOrderCode(client);
   const now = new Date().toISOString();
   const tx = await client.transaction("write");
   try {
-    await writeOrder(tx, input, code, now);
+    await writeOrder(tx, { ...input, voucherCode }, code, now);
     await tx.commit();
   } catch (error) {
     await tx.rollback();
@@ -689,6 +695,7 @@ async function writeOrder(
     shippingMethod: "manual" | "later";
     shippingAddress: string | null;
     userId: number | null;
+    voucherCode: string | null;
   },
   code: string,
   now: string,
@@ -764,10 +771,22 @@ async function writeOrder(
     });
   }
 
+  const subtotal = snapshots.reduce((sum, item) => sum + item.quantity * item.unitPriceVnd, 0);
+  const voucher = input.voucherCode ? await lockVoucher(sqlite, input.voucherCode, subtotal, now) : null;
   const order = await sqlite.execute({
-    sql: `INSERT INTO orders (code, zalo_phone, zalo_name, shipping_method, shipping_address, status, created_at, user_id)
-         VALUES (?, ?, ?, ?, ?, 'new', ?, ?)`,
-    args: [code, input.zaloPhone, input.zaloName, input.shippingMethod, input.shippingAddress, now, input.userId],
+    sql: `INSERT INTO orders (code, zalo_phone, zalo_name, shipping_method, shipping_address, status, created_at, user_id, voucher_code, discount_vnd)
+         VALUES (?, ?, ?, ?, ?, 'new', ?, ?, ?, ?)`,
+    args: [
+      code,
+      input.zaloPhone,
+      input.zaloName,
+      input.shippingMethod,
+      input.shippingAddress,
+      now,
+      input.userId,
+      voucher?.code ?? null,
+      voucher?.discount ?? 0,
+    ],
   });
   const orderId = Number(order.lastInsertRowid);
   for (const item of snapshots) {

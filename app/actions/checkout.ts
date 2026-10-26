@@ -4,14 +4,20 @@ import { revalidatePath } from "next/cache";
 import { currentUser } from "@/lib/current-user";
 import { placeOrder } from "@/lib/store";
 import { cleanPhone, isValidName, isValidPhone } from "@/lib/validate";
+import { quoteVoucher } from "@/lib/vouchers";
 
 export type CheckoutResult = { ok: true; code: string } | { ok: false; error: string };
+
+export async function previewVoucherAction(code: string, subtotal: number) {
+  return quoteVoucher(code, subtotal);
+}
 
 export async function placeOrderAction(formData: FormData): Promise<CheckoutResult> {
   const zaloName = String(formData.get("zaloName") ?? "").trim();
   const zaloPhone = cleanPhone(String(formData.get("zaloPhone") ?? ""));
   const shippingMethod = String(formData.get("shippingMethod") ?? "");
   const shippingAddress = String(formData.get("shippingAddress") ?? "").trim();
+  const voucherCode = String(formData.get("voucherCode") ?? "").trim();
 
   if (!isValidName(zaloName)) {
     return { ok: false, error: "Nhập tên Zalo từ 2 ký tự." };
@@ -57,10 +63,14 @@ export async function placeOrderAction(formData: FormData): Promise<CheckoutResu
       shippingMethod,
       shippingAddress: shippingMethod === "manual" ? shippingAddress : null,
       userId: user?.id ?? null,
+      voucherCode: voucherCode || null,
     });
     revalidatePath("/");
     revalidatePath("/admin");
     revalidatePath("/admin/orders");
+    revalidatePath("/admin/crm");
+    revalidatePath("/admin/crm/customers");
+    revalidatePath("/admin/crm/vouchers");
     revalidatePath("/account");
     return { ok: true, code: order.code };
   } catch (error) {
