@@ -42,6 +42,9 @@ yarn-error.log*
 /public/uploads/*
 !/public/uploads/.gitkeep
 
+# source banner art, too large to commit
+/images
+
 # vercel
 .vercel
 

@@ -6,16 +6,20 @@ const SLIDE = "min(720px, 62vw)";
 const GAP = "1.25rem";
 const SLIDES = [
   {
-    src: "https://www.30th.pokemon-card.com/images/m6a/m6a_kv_1e26c802.webp",
+    src: "/banners/1.webp",
+    alt: "MAUS COLLECTS Official Store",
+  },
+  {
+    src: "/banners/2.webp",
     alt: "Pokémon Card 30th Celebration",
   },
   {
-    src: "https://www.pokemon-card.com/assets/images/index/slides/576f46eefba24f4fbdacec2fcd6df397.png",
-    alt: "Pokémon Card 30th Celebration đang phát hành",
+    src: "/banners/3.webp",
+    alt: "Mega Lucario Z ex, ngày phát hành 27/11/2026",
   },
   {
-    src: "https://www.pokemon-card.com/assets/images/index/slides/b6071896673940f8a0d9fcd927641e8e.jpg",
-    alt: "Banner Pokémon Card Game",
+    src: "/banners/4.webp",
+    alt: "Bộ bài đặc biệt Mega",
   },
 ];
 
@@ -58,7 +62,7 @@ export function HomeCarousel() {
     <section
       className="relative left-1/2 mb-6 w-screen max-w-[100vw] -translate-x-1/2 -mt-6 overflow-hidden bg-white py-8"
       aria-roledescription="carousel"
-      aria-label="Banner 30th Celebration"
+      aria-label="Banner Maus Collect"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
     >
