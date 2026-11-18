@@ -7,7 +7,7 @@ const GAP = "1.25rem";
 const SLIDES = [
   {
     src: "/banners/1.webp",
-    alt: "Bộ bài đặc biệt Mega",
+    alt: "MAUS COLLECTS Official Store",
   },
   {
     src: "/banners/2.webp",
@@ -19,7 +19,7 @@ const SLIDES = [
   },
   {
     src: "/banners/4.webp",
-    alt: "MAUS COLLECTS Official Store",
+    alt: "Bộ bài đặc biệt Mega",
   },
   {
     src: "/banners/5.webp",
