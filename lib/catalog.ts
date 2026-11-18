@@ -24,6 +24,7 @@ export async function syncCatalog(): Promise<SyncReport> {
   const skipped: SyncReport["skipped"] = [];
 
   for (const set of SETS) {
+    if (set.era === "op") continue;
     if (!set.tcgdexId) {
       skipped.push({
         code: set.code,

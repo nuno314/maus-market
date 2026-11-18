@@ -29,6 +29,14 @@ export async function quoteCard(card: CardRow, condition: Condition): Promise<Pr
   if (card.language === "en") {
     return quoteEnglish(card, condition, set?.ptcgId ?? null, settings);
   }
+  if (set?.era === "op") {
+    return {
+      ok: false,
+      message: "One Piece chưa có giá tự động. Nhập giá yên thủ công.",
+      sourceUrl: null,
+      sourceCurrency: "JPY",
+    };
+  }
   return quoteJapanese(card, condition, set?.cardrushCode ?? card.setCode, settings);
 }
 

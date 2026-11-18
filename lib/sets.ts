@@ -1,7 +1,7 @@
 export type Language = "en" | "ja";
 export type Condition = "A" | "A-" | "B";
 export type Category = "card" | "booster-box" | "box-seal" | "box-unseal" | "pack" | "binder" | "sleeves" | "top-loader";
-export type Era = "sv" | "me";
+export type Era = "sv" | "me" | "op";
 
 export const CATEGORIES: { id: Category; label: string }[] = [
   { id: "card", label: "Thẻ" },
@@ -78,6 +78,32 @@ const SCARLET_JA: { tcgdexId: string; name: string }[] = [
   { tcgdexId: "SV10", name: "ロケット団の栄光" },
   { tcgdexId: "SV11B", name: "ブラックボルト" },
   { tcgdexId: "SV11W", name: "ホワイトフレア" },
+];
+
+const ONE_PIECE_JA: { code: string; name: string }[] = [
+  { code: "OP01", name: "Romance Dawn" },
+  { code: "OP02", name: "Paramount War" },
+  { code: "OP03", name: "Pillars of Strength" },
+  { code: "OP04", name: "Kingdoms of Intrigue" },
+  { code: "OP05", name: "Awakening of the New Era" },
+  { code: "OP06", name: "Wings of the Captain" },
+  { code: "OP07", name: "500 Years in the Future" },
+  { code: "OP08", name: "Two Legends" },
+  { code: "OP09", name: "Emperors in the New World" },
+  { code: "OP10", name: "Royal Blood" },
+  { code: "OP11", name: "A Fist of Divine Speed" },
+  { code: "OP12", name: "Legacy of the Master" },
+  { code: "OP13", name: "Carrying On His Will" },
+  { code: "OP14", name: "The Azure Sea's Seven" },
+  { code: "OP15", name: "Adventure on Kami's Island" },
+  { code: "OP16", name: "The Time of Battle" },
+  { code: "OP17", name: "The World's Strongest Warriors" },
+  { code: "OP18", name: "The Dominance of God" },
+  { code: "EB01", name: "Memorial Collection" },
+  { code: "EB02", name: "Anime 25th Collection" },
+  { code: "EB03", name: "One Piece Heroines Edition" },
+  { code: "EB04", name: "Egghead Crisis" },
+  { code: "EB05", name: "One Piece Heroines Edition vol.2" },
 ];
 
 export const SETS: SetDef[] = [
@@ -294,11 +320,25 @@ export const SETS: SetDef[] = [
     name: "30th CELEBRATION",
     chip: "M6A",
   },
+  ...ONE_PIECE_JA.map(
+    (set): SetDef => ({
+      tcgdexId: null,
+      ptcgId: null,
+      language: "ja",
+      era: "op",
+      code: set.code,
+      cardrushCode: null,
+      seasonKey: set.code,
+      name: set.name,
+      chip: set.code,
+    }),
+  ),
 ];
 
 export const ERAS: { id: Era; label: string }[] = [
   { id: "sv", label: "Scarlet & Violet" },
   { id: "me", label: "Mega Evolution" },
+  { id: "op", label: "One Piece TCG" },
 ];
 
 export const SEASONS = SETS.filter(
